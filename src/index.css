@@ -7,10 +7,12 @@
 }
 
 @layer base {
-  body {
+  html, body {
     font-family: var(--font-sans);
     background-color: #FAF9F6;
     color: #161614;
+    overflow-x: hidden;
+    max-width: 100vw;
   }
 
   h1, h2, h3, .font-display {

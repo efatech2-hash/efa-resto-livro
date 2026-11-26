@@ -179,14 +179,14 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
   const tablesArray = Array.from({length: Math.max(1, etab.nb_tables || 10)}, (_, i) => String(i + 1));
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      {/* Left 8 cols: Menu visual grid */}
-      <div className="lg:col-span-8 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="grid grid-cols-1 md:grid-cols-12 gap-5 lg:gap-6 items-start">
+      {/* Left: Menu visual grid (1 col mobile, 2 cols tablet, 3 cols desktop) */}
+      <div className="md:col-span-7 lg:col-span-8 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="font-display text-2xl font-bold text-[#161614]">Prise de Commande</h1>
-            <p className="text-xs text-stone-500">
-              Serveur actif : <strong className="text-[#161614]">{operatorName}</strong> · Touchez un article pour l’ajouter
+            <h1 className="font-display text-xl sm:text-2xl font-bold text-[#161614]">Prise de Commande</h1>
+            <p className="text-xs sm:text-sm text-stone-500">
+              Serveur actif : <strong className="text-[#161614]">{operatorName}</strong> · Touchez un article
             </p>
           </div>
           {/* Category Filter Tabs */}
@@ -201,7 +201,7 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
                 key={t.id}
                 type="button"
                 onClick={() => setCatFilter(t.id as typeof catFilter)}
-                className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors min-h-[40px] whitespace-nowrap ${
+                className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors min-h-[44px] whitespace-nowrap ${
                   catFilter === t.id ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600 hover:text-[#161614]'
                 }`}
               >
@@ -231,11 +231,11 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
               Aucun article dans cette catégorie
             </p>
             <p className="mt-1 text-xs text-stone-500">
-              Le Patron peut ajouter des {isBarOnly ? 'boissons' : 'plats, grillades et boissons'} dans l’onglet « Menu & Stock ».
+              Le Patron peut ajouter des {isBarOnly ? 'boissons' : 'plats, grillades et boissons'} dans « Menu & Stock ».
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
             {visibleMenus.map((item) => {
               const inCart = cart.find((c) => c.menu_id === item.id);
               return (
@@ -244,7 +244,7 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
                   type="button"
                   disabled={item.est_epuise || readOnly}
                   onClick={() => addItem(item)}
-                  className={`group text-left rounded-2xl border bg-white overflow-hidden transition-all active:scale-[0.98] flex flex-col justify-between ${
+                  className={`group text-left rounded-2xl border bg-white overflow-hidden transition-all active:scale-[0.98] flex sm:flex-col justify-between min-h-[92px] ${
                     item.est_epuise
                       ? 'border-stone-200 opacity-55 cursor-not-allowed'
                       : inCart
@@ -252,7 +252,7 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
                       : 'border-stone-200 hover:border-stone-300'
                   }`}
                 >
-                  <div className="aspect-[4/3] w-full bg-stone-100 relative overflow-hidden">
+                  <div className="w-28 sm:w-full sm:aspect-[4/3] bg-stone-100 relative overflow-hidden shrink-0">
                     {item.photo_url ? (
                       <img
                         src={item.photo_url}
@@ -271,14 +271,14 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
                       </span>
                     )}
                     {item.est_epuise && (
-                      <div className="absolute inset-0 bg-black/55 flex items-center justify-center">
-                        <span className="font-display text-sm font-bold text-white tracking-wide">
-                          PLAT FINI / ÉPUISÉ
+                      <div className="absolute inset-0 bg-black/55 flex items-center justify-center p-2 text-center">
+                        <span className="font-display text-xs sm:text-sm font-bold text-white tracking-wide">
+                          ÉPUISÉ
                         </span>
                       </div>
                     )}
                   </div>
-                  <div className="p-3.5 space-y-1">
+                  <div className="p-3.5 space-y-1 flex-1 flex flex-col justify-center">
                     <div className="text-[11px] font-medium text-stone-500">
                       <span className="capitalize">{item.categorie}</span>
                       {item.est_plat_du_jour && (
@@ -288,10 +288,10 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
                         </>
                       )}
                     </div>
-                    <h3 className="font-display text-sm sm:text-base font-bold text-[#161614] leading-snug line-clamp-2">
+                    <h3 className="font-display text-base font-bold text-[#161614] leading-snug line-clamp-2">
                       {item.nom}
                     </h3>
-                    <p className="font-mono text-base font-bold text-[#0E8A55] tabular-nums pt-0.5">
+                    <p className="font-mono text-base sm:text-lg font-extrabold text-[#0E8A55] tabular-nums pt-0.5">
                       {formatFCFA(item.prix)}
                     </p>
                   </div>
@@ -302,8 +302,8 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
         )}
       </div>
 
-      {/* Right 4 cols: Ticket builder & Send to Cashier */}
-      <aside className="lg:col-span-4 rounded-2xl border border-stone-200 bg-white p-5 space-y-4 lg:sticky lg:top-4">
+      {/* Right: Ticket builder & Send to Cashier (always right column on tablet md+ & desktop) */}
+      <aside className="md:col-span-5 lg:col-span-4 rounded-2xl border border-stone-200 bg-white p-4 sm:p-5 space-y-4 md:sticky md:top-4">
         <div className="flex items-center justify-between border-b border-stone-100 pb-3">
           <div className="flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-[#0E8A55]" />
@@ -330,7 +330,7 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
                 key={dest}
                 type="button"
                 onClick={() => setTypeService(dest)}
-                className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors min-h-[44px] flex items-center justify-center gap-1.5 ${
+                className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors min-h-[48px] flex items-center justify-center gap-1.5 ${
                   typeService === dest
                     ? 'border-emerald-700 bg-emerald-50 text-emerald-900'
                     : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50'
@@ -346,7 +346,7 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
             <select
               value={tableNum}
               onChange={(e) => setTableNum(e.target.value)}
-              className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm font-semibold min-h-[44px]"
+              className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm font-semibold min-h-[48px]"
             >
               {tablesArray.map((n) => (
                 <option key={n} value={n}>
@@ -362,7 +362,7 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
               value={clientNom}
               onChange={(e) => setClientNom(e.target.value)}
               placeholder="Nom du client (optionnel)"
-              className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm min-h-[44px]"
+              className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm min-h-[48px]"
             />
           )}
 
@@ -370,7 +370,7 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
             <select
               value={selectedSejourId}
               onChange={(e) => setSelectedSejourId(e.target.value)}
-              className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm font-semibold min-h-[44px]"
+              className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm font-semibold min-h-[48px]"
             >
               <option value="">-- Choisir une chambre occupée --</option>
               {occupiedRooms.map(({sejour}) => (
@@ -401,7 +401,7 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
                   <button
                     type="button"
                     onClick={() => updateQty(item.menu_id, -1)}
-                    className="w-9 h-9 rounded-lg border border-stone-200 flex items-center justify-center hover:bg-stone-100"
+                    className="w-11 h-11 rounded-xl border border-stone-200 flex items-center justify-center hover:bg-stone-100"
                     aria-label="Diminuer"
                   >
                     <Minus className="w-4 h-4" />
@@ -412,7 +412,7 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
                   <button
                     type="button"
                     onClick={() => updateQty(item.menu_id, 1)}
-                    className="w-9 h-9 rounded-lg border border-stone-200 flex items-center justify-center hover:bg-stone-100"
+                    className="w-11 h-11 rounded-xl border border-stone-200 flex items-center justify-center hover:bg-stone-100"
                     aria-label="Augmenter"
                   >
                     <Plus className="w-4 h-4" />
@@ -428,7 +428,7 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="Note cuisine/bar (ex : bien pimenté, sans glace)"
-          className="w-full rounded-xl border border-stone-200 bg-[#FAF9F6] px-3.5 py-2 text-xs"
+          className="w-full rounded-xl border border-stone-200 bg-[#FAF9F6] px-3.5 py-2.5 text-xs min-h-[44px]"
         />
 
         <div className="border-t border-stone-200 pt-3 flex items-center justify-between">
@@ -443,7 +443,7 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
             <button
               type="button"
               onClick={() => setCart([])}
-              className="rounded-xl border border-stone-300 p-3.5 text-stone-600 hover:bg-stone-50 min-h-[52px]"
+              className="rounded-xl border border-stone-300 px-3.5 text-stone-600 hover:bg-stone-50 min-h-[52px] flex items-center justify-center"
               aria-label="Vider le panier"
             >
               <Trash2 className="w-5 h-5" />
@@ -453,10 +453,10 @@ export const ServeurView: React.FC<ServeurViewProps> = ({
             type="button"
             disabled={sending || cart.length === 0 || readOnly}
             onClick={handleSendToCashier}
-            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] px-5 py-3.5 text-sm font-bold text-white hover:bg-[#0B7145] disabled:opacity-50 min-h-[52px]"
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] px-4 py-3.5 text-sm font-bold text-white hover:bg-[#0B7145] disabled:opacity-50 min-h-[52px]"
           >
-            <Send className="w-4 h-4" />
-            {sending ? 'Envoi...' : 'ENVOYER À LA CAISSE'}
+            <Send className="w-4 h-4 shrink-0" />
+            <span>{sending ? 'Envoi...' : 'ENVOYER À LA CAISSE'}</span>
           </button>
         </div>
       </aside>

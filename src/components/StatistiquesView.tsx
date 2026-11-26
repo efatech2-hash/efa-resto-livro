@@ -198,7 +198,7 @@ export const StatistiquesView: React.FC<StatistiquesViewProps> = ({
             Indicateurs calculés en direct depuis vos ventes, commandes et séjours Supabase.
           </p>
         </div>
-        <div className="flex items-center gap-1 rounded-xl bg-stone-100 p-1">
+        <div className="flex flex-wrap items-center gap-1 rounded-xl bg-stone-100 p-1 w-full sm:w-auto">
           {[
             {id: 'week', label: '7 derniers jours'},
             {id: 'month', label: '30 derniers jours'},
@@ -208,7 +208,7 @@ export const StatistiquesView: React.FC<StatistiquesViewProps> = ({
               key={p.id}
               type="button"
               onClick={() => setPeriod(p.id as typeof period)}
-              className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap ${
+              className={`flex-1 sm:flex-initial rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap min-h-[48px] ${
                 period === p.id ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600'
               }`}
             >
@@ -219,7 +219,7 @@ export const StatistiquesView: React.FC<StatistiquesViewProps> = ({
       </div>
 
       {/* Averages KPI Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <div className="rounded-xl border border-stone-200 bg-white p-4">
           <span className="text-xs text-stone-500">Chiffre d’affaires période</span>
           <p className="mt-1 font-mono text-xl font-extrabold text-[#161614] tabular-nums">
@@ -280,7 +280,7 @@ export const StatistiquesView: React.FC<StatistiquesViewProps> = ({
                 const widthPct = Math.max(4, Math.round((p.qty / maxProductQty) * 100));
                 return (
                   <div key={p.nom} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 text-xs">
                       <span className="font-semibold text-[#161614]">{p.nom}</span>
                       <span className="font-mono text-stone-600 tabular-nums">
                         {p.qty} vendu(s) · {formatFCFA(p.revenue)} · Marge {formatFCFA(p.profit)}
@@ -335,12 +335,35 @@ export const StatistiquesView: React.FC<StatistiquesViewProps> = ({
         </div>
       </div>
 
-      {/* Sales by Server Table */}
+      {/* Sales by Server */}
       <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden">
         <div className="p-5 border-b border-stone-200">
           <h2 className="font-display text-lg font-bold text-[#161614]">Ventes par serveur</h2>
         </div>
-        <div className="overflow-x-auto">
+
+        {/* Mobile Cards (< md) */}
+        <div className="md:hidden divide-y divide-stone-100">
+          {serverStats.length === 0 ? (
+            <p className="p-8 text-center text-xs text-stone-500">
+              Aucune vente par serveur sur cette période.
+            </p>
+          ) : (
+            serverStats.map((s) => (
+              <div key={s.nom} className="p-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-sm text-[#161614]">{s.nom}</p>
+                  <p className="text-xs text-stone-500 font-mono tabular-nums">{s.count} commande(s)</p>
+                </div>
+                <span className="font-mono font-bold text-base text-[#0E8A55] tabular-nums">
+                  {formatFCFA(s.total)}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Tablet/Desktop Table (md+) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-[#FAF9F6] border-b border-stone-200 text-xs font-semibold text-stone-600">
               <tr>
@@ -382,7 +405,7 @@ export const StatistiquesView: React.FC<StatistiquesViewProps> = ({
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             <div className="rounded-xl border border-stone-200 bg-[#FAF9F6] p-4">
               <span className="text-xs text-stone-500">Taux d’occupation actuel</span>
               <p className="mt-1 font-mono text-2xl font-extrabold text-[#161614] tabular-nums">
@@ -419,28 +442,46 @@ export const StatistiquesView: React.FC<StatistiquesViewProps> = ({
           </div>
 
           {hotelStats.topRooms.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-[#FAF9F6] border-b border-stone-200 text-xs font-semibold text-stone-600">
-                  <tr>
-                    <th className="px-4 py-2.5">Chambre la plus louée</th>
-                    <th className="px-4 py-2.5 text-right">Séjours</th>
-                    <th className="px-4 py-2.5 text-right">Revenu généré</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-100">
-                  {hotelStats.topRooms.slice(0, 6).map((r) => (
-                    <tr key={r.numero}>
-                      <td className="px-4 py-2.5 font-bold">Chambre {r.numero}</td>
-                      <td className="px-4 py-2.5 text-right font-mono tabular-nums">{r.count}</td>
-                      <td className="px-4 py-2.5 text-right font-mono font-bold text-[#0E8A55] tabular-nums">
-                        {formatFCFA(r.rev)}
-                      </td>
+            <>
+              {/* Mobile Cards (< md) */}
+              <div className="md:hidden divide-y divide-stone-100 rounded-xl border border-stone-200 overflow-hidden">
+                {hotelStats.topRooms.slice(0, 6).map((r) => (
+                  <div key={r.numero} className="p-3.5 flex items-center justify-between gap-2 bg-white">
+                    <div>
+                      <p className="font-bold text-sm text-[#161614]">Chambre {r.numero}</p>
+                      <p className="text-xs text-stone-500 font-mono tabular-nums">{r.count} séjour(s)</p>
+                    </div>
+                    <span className="font-mono font-bold text-sm text-[#0E8A55] tabular-nums">
+                      {formatFCFA(r.rev)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tablet/Desktop Table (md+) */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-[#FAF9F6] border-b border-stone-200 text-xs font-semibold text-stone-600">
+                    <tr>
+                      <th className="px-4 py-2.5">Chambre la plus louée</th>
+                      <th className="px-4 py-2.5 text-right">Séjours</th>
+                      <th className="px-4 py-2.5 text-right">Revenu généré</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {hotelStats.topRooms.slice(0, 6).map((r) => (
+                      <tr key={r.numero}>
+                        <td className="px-4 py-2.5 font-bold">Chambre {r.numero}</td>
+                        <td className="px-4 py-2.5 text-right font-mono tabular-nums">{r.count}</td>
+                        <td className="px-4 py-2.5 text-right font-mono font-bold text-[#0E8A55] tabular-nums">
+                          {formatFCFA(r.rev)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </section>
       )}

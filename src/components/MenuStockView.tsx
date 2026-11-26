@@ -245,7 +245,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1 rounded-xl bg-stone-100 p-1">
+        <div className="flex flex-wrap items-center gap-1 rounded-xl bg-stone-100 p-1 w-full sm:w-auto">
           {[
             {id: 'menu', label: `Menu (${menus.length}${formuleObj.max_produits ? `/${formuleObj.max_produits}` : ''})`},
             {id: 'stock', label: `Stock (${stock.length})`},
@@ -256,7 +256,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
               key={t.id}
               type="button"
               onClick={() => setSubTab(t.id as typeof subTab)}
-              className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors whitespace-nowrap ${
+              className={`flex-1 sm:flex-initial rounded-lg px-3 py-2 text-xs font-semibold transition-colors whitespace-nowrap min-h-[48px] ${
                 subTab === t.id ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600'
               }`}
             >
@@ -289,7 +289,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
                 type="button"
                 disabled={formuleObj.max_produits !== null && menus.length >= formuleObj.max_produits}
                 onClick={() => setShowNewMenu(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#0E8A55] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#0B7145] disabled:opacity-50"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0E8A55] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#0B7145] disabled:opacity-50 min-h-[48px]"
               >
                 <Plus className="w-4 h-4" />
                 Ajouter au Menu
@@ -297,7 +297,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {menus.map((m) => (
               <div key={m.id} className="rounded-2xl border border-stone-200 bg-white overflow-hidden flex flex-col justify-between">
                 <div className="flex gap-3 p-4">
@@ -313,7 +313,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
                   <div className="min-w-0 flex-1">
                     <span className="text-[11px] font-medium text-stone-500 capitalize">{m.categorie}</span>
                     <h3 className="font-display font-bold text-base text-[#161614] truncate">{m.nom}</h3>
-                    <div className="mt-1 flex items-center gap-3 font-mono text-xs tabular-nums">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-xs tabular-nums">
                       <span className="font-bold text-[#0E8A55]">{formatFCFA(m.prix)}</span>
                       <span className="text-stone-400">Coût : {formatFCFA(m.cout_revient)}</span>
                     </div>
@@ -331,7 +331,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
                       type="button"
                       disabled={readOnly}
                       onClick={() => onToggleMenuFlag(m.id, 'est_plat_du_jour', !m.est_plat_du_jour)}
-                      className={`rounded-lg py-2 text-xs font-semibold border transition-colors ${
+                      className={`rounded-lg py-2 text-xs font-semibold border transition-colors min-h-[48px] ${
                         m.est_plat_du_jour
                           ? 'border-amber-600 bg-amber-50 text-amber-900'
                           : 'border-stone-200 bg-white text-stone-600'
@@ -344,7 +344,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
                     type="button"
                     disabled={readOnly}
                     onClick={() => onToggleMenuFlag(m.id, 'est_epuise', !m.est_epuise)}
-                    className={`${isBarOnly ? 'col-span-2' : ''} rounded-lg py-2 text-xs font-semibold border transition-colors ${
+                    className={`${isBarOnly ? 'col-span-2' : ''} rounded-lg py-2 text-xs font-semibold border transition-colors min-h-[48px] ${
                       m.est_epuise
                         ? 'border-red-600 bg-red-50 text-red-800'
                         : 'border-stone-200 bg-white text-stone-600'
@@ -374,13 +374,13 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
             </div>
           )}
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-lg font-bold text-[#161614]">Inventaire Stock en direct</h2>
             {!readOnly && (
               <button
                 type="button"
                 onClick={() => setShowNewStock(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#0E8A55] px-4 py-2 text-xs font-bold text-white"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0E8A55] px-4 py-2 text-xs font-bold text-white min-h-[48px]"
               >
                 <Plus className="w-4 h-4" />
                 Nouvel ingrédient / boisson
@@ -388,7 +388,56 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
             )}
           </div>
 
-          <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden">
+          {/* Mobile Cards for Stock (< md) */}
+          <div className="md:hidden space-y-3">
+            {stock.length === 0 ? (
+              <div className="rounded-2xl border border-stone-200 bg-white p-8 text-center text-xs text-stone-500">
+                Aucun article en stock. Ajoutez vos ingrédients (Riz, Poulet, Tomate, Huile, Boissons).
+              </div>
+            ) : (
+              stock.map((s) => {
+                const isLow = Number(s.quantite) <= Number(s.seuil_alerte);
+                return (
+                  <div key={s.id} className="rounded-2xl border border-stone-200 bg-white p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-display text-base font-bold text-[#161614]">{s.nom}</p>
+                        <p className="text-xs capitalize text-stone-500">{s.categorie}</p>
+                      </div>
+                      <span
+                        className={`font-mono text-sm font-extrabold tabular-nums ${
+                          isLow ? 'text-red-700' : 'text-emerald-800'
+                        }`}
+                      >
+                        {s.quantite} {s.unite} {isLow && '· BAS'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-stone-500 border-t border-stone-100 pt-2">
+                      <span>Seuil : {s.seuil_alerte} {s.unite}</span>
+                      <span className="font-mono font-semibold text-stone-700 tabular-nums">
+                        Achat : {formatFCFA(s.prix_achat_unitaire)}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={readOnly}
+                      onClick={() => {
+                        setApproStock(s);
+                        setApproPrixUnit(s.prix_achat_unitaire);
+                      }}
+                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#161614] px-3 py-2.5 text-xs font-bold text-white hover:bg-stone-800 min-h-[48px]"
+                    >
+                      <PackagePlus className="w-4 h-4" />
+                      Approvisionner
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Tablet/Desktop Table for Stock (md+) */}
+          <div className="hidden md:block rounded-2xl border border-stone-200 bg-white overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="bg-[#FAF9F6] border-b border-stone-200 text-xs font-semibold text-stone-600">
@@ -436,7 +485,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
                                 setApproStock(s);
                                 setApproPrixUnit(s.prix_achat_unitaire);
                               }}
-                              className="inline-flex items-center gap-1 rounded-lg bg-[#161614] px-3 py-1.5 text-xs font-semibold text-white hover:bg-stone-800"
+                              className="inline-flex items-center gap-1 rounded-lg bg-[#161614] px-3 py-2 text-xs font-semibold text-white hover:bg-stone-800 min-h-[44px]"
                             >
                               <PackagePlus className="w-3.5 h-3.5" />
                               Approvisionner
@@ -460,7 +509,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
                 {approvisionnements.slice(0, 8).map((a) => {
                   const st = stock.find((s) => s.id === a.stock_id);
                   return (
-                    <div key={a.id} className="flex items-center justify-between border-b border-stone-100 pb-2">
+                    <div key={a.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b border-stone-100 pb-2">
                       <span>
                         <strong>{st?.nom || 'Article'}</strong> (+{a.quantite} {st?.unite || ''}) ·{' '}
                         {a.fournisseur || 'Fournisseur'} · {formatDateTime(a.created_at)}
@@ -698,7 +747,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
               <button
                 type="button"
                 onClick={() => setSubCycle('mensuel')}
-                className={`rounded-xl border py-2.5 text-xs font-semibold ${
+                className={`rounded-xl border py-2.5 text-xs font-semibold min-h-[48px] ${
                   subCycle === 'mensuel' ? 'border-emerald-700 bg-emerald-50 text-emerald-900' : 'border-stone-200'
                 }`}
               >
@@ -707,7 +756,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
               <button
                 type="button"
                 onClick={() => setSubCycle('annuel')}
-                className={`rounded-xl border py-2.5 text-xs font-semibold ${
+                className={`rounded-xl border py-2.5 text-xs font-semibold min-h-[48px] ${
                   subCycle === 'annuel' ? 'border-emerald-700 bg-emerald-50 text-emerald-900' : 'border-stone-200'
                 }`}
               >
@@ -720,7 +769,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
                   key={m}
                   type="button"
                   onClick={() => setSubMode(m)}
-                  className={`rounded-xl border py-2.5 text-xs font-semibold ${
+                  className={`rounded-xl border py-2.5 text-xs font-semibold min-h-[48px] ${
                     subMode === m ? 'border-emerald-700 bg-emerald-50 text-emerald-900' : 'border-stone-200'
                   }`}
                 >
@@ -738,7 +787,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
                 value={subRef}
                 onChange={(e) => setSubRef(e.target.value)}
                 placeholder="Ex : TXN-2026-8841"
-                className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm font-mono"
+                className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm font-mono min-h-[48px]"
               />
             </div>
             <div className="rounded-xl bg-[#FAF9F6] border border-stone-200 p-3.5 flex items-center justify-between">
@@ -750,7 +799,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
             <button
               type="submit"
               disabled={payingSub}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] py-3.5 text-sm font-bold text-white hover:bg-[#0B7145]"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] py-3.5 text-sm font-bold text-white hover:bg-[#0B7145] min-h-[48px]"
             >
               <CreditCard className="w-4 h-4" />
               {payingSub ? 'Activation...' : 'Confirmer & Débloquer la formule'}

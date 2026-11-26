@@ -286,12 +286,12 @@ export const HotelView: React.FC<HotelViewProps> = ({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1 rounded-xl bg-stone-100 p-1">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-1 rounded-xl bg-stone-100 p-1 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => setSubTab('chambres')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap ${
+              className={`flex-1 sm:flex-initial rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap min-h-[48px] ${
                 subTab === 'chambres' ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600'
               }`}
             >
@@ -300,7 +300,7 @@ export const HotelView: React.FC<HotelViewProps> = ({
             <button
               type="button"
               onClick={() => setSubTab('reservations')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap ${
+              className={`flex-1 sm:flex-initial rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap min-h-[48px] ${
                 subTab === 'reservations' ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600'
               }`}
             >
@@ -309,7 +309,7 @@ export const HotelView: React.FC<HotelViewProps> = ({
             <button
               type="button"
               onClick={() => setSubTab('menage')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap ${
+              className={`flex-1 sm:flex-initial rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap min-h-[48px] ${
                 subTab === 'menage' ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600'
               }`}
             >
@@ -321,7 +321,7 @@ export const HotelView: React.FC<HotelViewProps> = ({
               type="button"
               disabled={chambres.length >= formuleObj.max_chambres}
               onClick={() => setShowNewRoom(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#0E8A55] px-4 py-2 text-xs font-bold text-white hover:bg-[#0B7145] disabled:opacity-50 min-h-[40px]"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0E8A55] px-4 py-2 text-xs font-bold text-white hover:bg-[#0B7145] disabled:opacity-50 min-h-[48px]"
             >
               <Plus className="w-4 h-4" />
               Ajouter Chambre
@@ -377,7 +377,7 @@ export const HotelView: React.FC<HotelViewProps> = ({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {chambres.map((ch) => {
                 const ui = CHAMBRE_STATUS_UI[ch.statut];
                 const sejour = activeSejoursByRoom.get(ch.id);
@@ -460,7 +460,7 @@ export const HotelView: React.FC<HotelViewProps> = ({
                           type="button"
                           disabled={readOnly}
                           onClick={() => setCheckInRoom(ch)}
-                          className="w-full rounded-xl bg-[#0E8A55] py-2.5 text-xs font-bold text-white hover:bg-[#0B7145] min-h-[44px]"
+                          className="w-full rounded-xl bg-[#0E8A55] py-2.5 text-xs font-bold text-white hover:bg-[#0B7145] min-h-[48px]"
                         >
                           CHECK-IN CLIENT
                         </button>
@@ -470,7 +470,7 @@ export const HotelView: React.FC<HotelViewProps> = ({
                           type="button"
                           disabled={readOnly}
                           onClick={() => setCheckOutTarget({sejour, chambre: ch})}
-                          className="w-full rounded-xl bg-red-600 py-2.5 text-xs font-bold text-white hover:bg-red-700 min-h-[44px]"
+                          className="w-full rounded-xl bg-red-600 py-2.5 text-xs font-bold text-white hover:bg-red-700 min-h-[48px]"
                         >
                           CHECK-OUT & FACTURE
                         </button>
@@ -484,7 +484,7 @@ export const HotelView: React.FC<HotelViewProps> = ({
                             if (task) onCleanRoom(task, operatorName);
                             else onUpdateChambreStatut(ch.id, 'LIBRE');
                           }}
-                          className="w-full rounded-xl bg-amber-600 py-2.5 text-xs font-bold text-white hover:bg-amber-700 min-h-[44px]"
+                          className="w-full rounded-xl bg-amber-600 py-2.5 text-xs font-bold text-white hover:bg-amber-700 min-h-[48px]"
                         >
                           CHAMBRE NETTOYÉE
                         </button>
@@ -494,7 +494,7 @@ export const HotelView: React.FC<HotelViewProps> = ({
                           type="button"
                           disabled={readOnly}
                           onClick={() => setCheckInRoom(ch)}
-                          className="w-full rounded-xl bg-blue-700 py-2.5 text-xs font-bold text-white hover:bg-blue-800 min-h-[44px]"
+                          className="w-full rounded-xl bg-blue-700 py-2.5 text-xs font-bold text-white hover:bg-blue-800 min-h-[48px]"
                         >
                           ARRIVÉE CLIENT (CHECK-IN)
                         </button>
@@ -504,7 +504,7 @@ export const HotelView: React.FC<HotelViewProps> = ({
                           value={ch.statut}
                           disabled={readOnly}
                           onChange={(e) => onUpdateChambreStatut(ch.id, e.target.value as ChambreStatut)}
-                          className="w-full rounded-lg border border-stone-200 bg-[#FAF9F6] px-2.5 py-1.5 text-xs text-stone-700"
+                          className="w-full rounded-lg border border-stone-200 bg-[#FAF9F6] px-2.5 py-2 text-xs text-stone-700 min-h-[48px]"
                         >
                           <option value="LIBRE">Statut : LIBRE</option>
                           <option value="EN_NETTOYAGE">Statut : EN NETTOYAGE</option>
@@ -531,77 +531,137 @@ export const HotelView: React.FC<HotelViewProps> = ({
                   setResRoomId(chambres[0].id);
                   setShowNewRes(true);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#161614] px-4 py-2.5 text-xs font-bold text-white"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#161614] px-4 py-2.5 text-xs font-bold text-white min-h-[48px]"
               >
                 <CalendarClock className="w-4 h-4" />
                 Nouvelle réservation
               </button>
             )}
           </div>
-          <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-[#FAF9F6] border-b border-stone-200 text-xs font-semibold text-stone-600">
-                <tr>
-                  <th className="px-4 py-3">Chambre</th>
-                  <th className="px-4 py-3">Client</th>
-                  <th className="px-4 py-3">Arrivée → Départ</th>
-                  <th className="px-4 py-3">Séjour</th>
-                  <th className="px-4 py-3 text-right">Acompte</th>
-                  <th className="px-4 py-3">Statut</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100">
-                {reservations.length === 0 ? (
+
+          {/* Mobile Cards for Reservations (< md) */}
+          <div className="md:hidden space-y-3">
+            {reservations.length === 0 ? (
+              <div className="rounded-2xl border border-stone-200 bg-white p-8 text-center text-xs text-stone-500">
+                Aucune réservation enregistrée.
+              </div>
+            ) : (
+              reservations.map((r) => {
+                const ch = chambres.find((c) => c.id === r.chambre_id);
+                return (
+                  <div key={r.id} className="rounded-2xl border border-stone-200 bg-white p-4 space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="font-display text-base font-extrabold text-[#161614]">
+                          Chambre {ch?.numero || '—'}
+                        </span>
+                        <p className="text-sm font-semibold text-[#161614]">{r.client_nom}</p>
+                        <p className="text-xs font-mono text-stone-500">{r.client_tel}</p>
+                      </div>
+                      <span className="text-xs font-bold text-stone-700">{r.statut}</span>
+                    </div>
+                    <div className="rounded-xl bg-[#FAF9F6] border border-stone-100 p-2.5 text-xs space-y-1">
+                      <p className="font-mono text-stone-700">
+                        {formatDateTime(r.date_arrivee)} → {formatDateTime(r.date_depart)}
+                      </p>
+                      <div className="flex justify-between">
+                        <span className="text-stone-500">Séjour : {r.type_sejour}</span>
+                        <span className="font-mono font-bold text-[#0E8A55] tabular-nums">
+                          Acompte : {formatFCFA(r.acompte)}
+                        </span>
+                      </div>
+                    </div>
+                    {r.statut === 'CONFIRMEE' && !readOnly && (
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => onUpdateReservationStatut(r.id, r.chambre_id, 'HONOREE')}
+                          className="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white min-h-[48px]"
+                        >
+                          Honorée
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onUpdateReservationStatut(r.id, r.chambre_id, 'ANNULEE')}
+                          className="rounded-xl border border-stone-300 px-3 py-2 text-xs font-bold text-stone-700 min-h-[48px]"
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Tablet/Desktop Table (md+) */}
+          <div className="hidden md:block rounded-2xl border border-stone-200 bg-white overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-[#FAF9F6] border-b border-stone-200 text-xs font-semibold text-stone-600">
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-xs text-stone-500">
-                      Aucune réservation enregistrée.
-                    </td>
+                    <th className="px-4 py-3">Chambre</th>
+                    <th className="px-4 py-3">Client</th>
+                    <th className="px-4 py-3">Arrivée → Départ</th>
+                    <th className="px-4 py-3">Séjour</th>
+                    <th className="px-4 py-3 text-right">Acompte</th>
+                    <th className="px-4 py-3">Statut</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
-                ) : (
-                  reservations.map((r) => {
-                    const ch = chambres.find((c) => c.id === r.chambre_id);
-                    return (
-                      <tr key={r.id}>
-                        <td className="px-4 py-3 font-bold">Ch. {ch?.numero || '—'}</td>
-                        <td className="px-4 py-3">
-                          <div className="font-semibold">{r.client_nom}</div>
-                          <div className="text-xs text-stone-500 font-mono">{r.client_tel}</div>
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs tabular-nums">
-                          {formatDateTime(r.date_arrivee)} → {formatDateTime(r.date_depart)}
-                        </td>
-                        <td className="px-4 py-3 text-xs">{r.type_sejour}</td>
-                        <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums">
-                          {formatFCFA(r.acompte)}
-                        </td>
-                        <td className="px-4 py-3 text-xs font-bold">{r.statut}</td>
-                        <td className="px-4 py-3 text-right">
-                          {r.statut === 'CONFIRMEE' && !readOnly && (
-                            <div className="inline-flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => onUpdateReservationStatut(r.id, r.chambre_id, 'HONOREE')}
-                                className="rounded-lg bg-emerald-700 px-2.5 py-1 text-xs font-semibold text-white"
-                              >
-                                Honorée
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => onUpdateReservationStatut(r.id, r.chambre_id, 'ANNULEE')}
-                                className="rounded-lg border border-stone-300 px-2.5 py-1 text-xs font-semibold text-stone-600"
-                              >
-                                Annuler
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {reservations.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-10 text-center text-xs text-stone-500">
+                        Aucune réservation enregistrée.
+                      </td>
+                    </tr>
+                  ) : (
+                    reservations.map((r) => {
+                      const ch = chambres.find((c) => c.id === r.chambre_id);
+                      return (
+                        <tr key={r.id}>
+                          <td className="px-4 py-3 font-bold">Ch. {ch?.numero || '—'}</td>
+                          <td className="px-4 py-3">
+                            <div className="font-semibold">{r.client_nom}</div>
+                            <div className="text-xs text-stone-500 font-mono">{r.client_tel}</div>
+                          </td>
+                          <td className="px-4 py-3 font-mono text-xs tabular-nums">
+                            {formatDateTime(r.date_arrivee)} → {formatDateTime(r.date_depart)}
+                          </td>
+                          <td className="px-4 py-3 text-xs">{r.type_sejour}</td>
+                          <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums">
+                            {formatFCFA(r.acompte)}
+                          </td>
+                          <td className="px-4 py-3 text-xs font-bold">{r.statut}</td>
+                          <td className="px-4 py-3 text-right">
+                            {r.statut === 'CONFIRMEE' && !readOnly && (
+                              <div className="inline-flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => onUpdateReservationStatut(r.id, r.chambre_id, 'HONOREE')}
+                                  className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white min-h-[44px]"
+                                >
+                                  Honorée
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onUpdateReservationStatut(r.id, r.chambre_id, 'ANNULEE')}
+                                  className="rounded-lg border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-600 min-h-[44px]"
+                                >
+                                  Annuler
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -856,13 +916,20 @@ export const HotelView: React.FC<HotelViewProps> = ({
 
       {/* Modal Check-out unifié (Chambre + Prolongation + Resto + Bar) */}
       {checkOutTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="font-display text-lg font-bold">
-                Check-out Facture Unique · Ch. {checkOutTarget.chambre.numero}
-              </h3>
-              <button type="button" onClick={() => setCheckOutTarget(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+          <div className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 space-y-4 shadow-xl my-8">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <img
+                  src="/logo-efa-clean.png"
+                  alt="EFA RESTO-LIVRO"
+                  className="h-10 w-auto object-contain shrink-0"
+                />
+                <h3 className="font-display text-base sm:text-lg font-bold">
+                  Facture Check-out · Ch. {checkOutTarget.chambre.numero}
+                </h3>
+              </div>
+              <button type="button" onClick={() => setCheckOutTarget(null)} className="p-1">
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
@@ -909,7 +976,7 @@ export const HotelView: React.FC<HotelViewProps> = ({
                         key={m}
                         type="button"
                         onClick={() => setCheckoutMode(m)}
-                        className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
+                        className={`rounded-xl border px-3 py-2 text-xs font-semibold min-h-[48px] ${
                           checkoutMode === m
                             ? 'border-emerald-700 bg-emerald-50 text-emerald-900'
                             : 'border-stone-200'
@@ -922,7 +989,7 @@ export const HotelView: React.FC<HotelViewProps> = ({
                   <button
                     type="button"
                     onClick={handleConfirmCheckOut}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] py-3.5 text-sm font-bold text-white hover:bg-[#0B7145]"
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] py-3.5 text-sm font-bold text-white hover:bg-[#0B7145] min-h-[48px]"
                   >
                     <UserCheck className="w-4 h-4" />
                     Encaisser & Libérer (→ Ménage)

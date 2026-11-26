@@ -12,14 +12,24 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png'],
+        manifestFilename: 'manifest.json',
+        includeAssets: [
+          'favicon.png',
+          'apple-touch-icon.png',
+          'logo-efa.jpg',
+          'logo-efa-clean.png',
+          'logo-emblem.png',
+          'pwa-192x192.png',
+          'pwa-512x512.png',
+          'pwa-maskable-512x512.png',
+        ],
         manifest: {
           id: '/',
           name: 'EFA RESTO-LIVRO',
-          short_name: 'EFA RESTO',
-          description: 'Gestion SaaS pour restaurants, bars, livraisons et hôtels africains.',
+          short_name: 'EFA',
+          description: 'Gestion complète pour restaurants, bars, livraisons et hôtels africains.',
           theme_color: '#0E8A55',
-          background_color: '#FAF9F6',
+          background_color: '#FFFFFF',
           display: 'standalone',
           start_url: '/',
           scope: '/',
@@ -45,7 +55,7 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,woff,woff2}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,woff,woff2}'],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -78,9 +88,6 @@ export default defineConfig(() => {
           type: 'module',
         },
       }),
-      // Copies src/assets into dist/ so root-relative URLs like
-      // "/src/assets/images/..." (e.g. generate_image output) still resolve
-      // in production builds. Do not remove.
       {
         name: 'copy-unbundled-src-assets',
         apply: 'build',

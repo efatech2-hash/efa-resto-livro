@@ -21,7 +21,12 @@ import {CuisineBarView} from './components/CuisineBarView';
 import {HotelView} from './components/HotelView';
 import {LivraisonView} from './components/LivraisonView';
 import {MenuStockView} from './components/MenuStockView';
-import {OfflineSyncBar, PWAInstallButton} from './components/PWAComponents';
+import {
+  OfflineSyncBar,
+  PWAInstallBanner,
+  PWAInstallButton,
+  SplashScreen,
+} from './components/PWAComponents';
 import {ServeurView} from './components/ServeurView';
 import {SqlSetupModal} from './components/SqlSetupModal';
 import {StatistiquesView} from './components/StatistiquesView';
@@ -124,6 +129,12 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('serveur');
   const [pendingOps, setPendingOps] = useState<number>(() => getOfflineQueue().length);
   const [syncing, setSyncing] = useState(false);
+  const [bootSplash, setBootSplash] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setBootSplash(false), 600);
+    return () => clearTimeout(timer);
+  }, []);
 
   const verifyDatabase = useCallback(async () => {
     const res = await checkDatabaseInitialized();
@@ -998,15 +1009,8 @@ export default function App() {
   // --------------------------------------------------------------------------
   // RENDER GATES
   // --------------------------------------------------------------------------
-  if (dbReady === null || authLoading) {
-    return (
-      <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <RefreshCw className="w-6 h-6 text-[#0E8A55] animate-spin mx-auto" />
-          <p className="text-xs font-medium text-stone-500">Connexion à EFA RESTO-LIVRO...</p>
-        </div>
-      </div>
-    );
+  if (dbReady === null || authLoading || bootSplash) {
+    return <SplashScreen />;
   }
 
   if (dbReady === false || showSqlHelp) {
@@ -1040,22 +1044,30 @@ export default function App() {
   // SUPER-ADMIN SHELL
   if (profil.role === 'super_admin') {
     return (
-      <div className="min-h-screen bg-[#FAF9F6] text-[#161614] flex flex-col">
+      <div className="min-h-screen bg-[#FAF9F6] text-[#161614] flex flex-col overflow-x-hidden">
+        <PWAInstallBanner />
         <header className="border-b border-stone-200 bg-white">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3.5 flex items-center justify-between gap-6">
-            <span className="font-display text-lg font-extrabold tracking-tight text-[#161614] whitespace-nowrap">
-              EFA RESTO-LIVRO · Super-Admin
-            </span>
-            <div className="flex items-center gap-3">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img
+                src="/logo-emblem.png"
+                alt="Logo EFA RESTO-LIVRO"
+                className="w-9 h-9 rounded-full object-contain shrink-0"
+              />
+              <span className="font-display text-base sm:text-lg font-extrabold tracking-tight text-[#161614] truncate">
+                EFA RESTO-LIVRO · Super-Admin
+              </span>
+            </div>
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <PWAInstallButton />
-              <span className="hidden sm:inline text-xs font-medium text-stone-500">{profil.nom}</span>
+              <span className="hidden md:inline text-xs font-medium text-stone-500">{profil.nom}</span>
               <button
                 type="button"
                 onClick={handleSignOut}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 px-3.5 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 min-h-[48px]"
               >
-                <LogOut className="w-3.5 h-3.5" />
-                Déconnexion
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Déconnexion</span>
               </button>
             </div>
           </div>
@@ -1086,7 +1098,8 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] text-[#161614] flex flex-col">
+    <div className="min-h-screen bg-[#FAF9F6] text-[#161614] flex flex-col overflow-x-hidden">
+      <PWAInstallBanner />
       <OfflineSyncBar
         isOnline={isOnline}
         pendingCount={pendingOps}
@@ -1104,7 +1117,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveTab('admin')}
-              className="rounded-md bg-white text-red-800 px-3 py-1 text-xs font-bold whitespace-nowrap"
+              className="rounded-lg bg-white text-red-800 px-3 py-2 text-xs font-bold whitespace-nowrap min-h-[44px]"
             >
               Régulariser maintenant
             </button>
@@ -1112,19 +1125,26 @@ export default function App() {
         </div>
       )}
 
-      {/* Workspace Layout: Sidebar on lg+, Bottom nav on mobile */}
-      <div className="flex-1 flex flex-col lg:flex-row">
-        {/* Desktop Sidebar */}
-        <aside className="hidden lg:flex lg:w-64 lg:flex-col border-r border-stone-200 bg-white p-4 justify-between shrink-0">
+      {/* Workspace Layout: Sidebar on Tablet (md+) & Desktop, Bottom nav on Smartphone (< md) */}
+      <div className="flex-1 flex flex-col md:flex-row min-w-0">
+        {/* Tablet & Desktop Left Sidebar */}
+        <aside className="hidden md:flex md:w-56 lg:w-64 md:flex-col border-r border-stone-200 bg-white p-4 justify-between shrink-0">
           <div className="space-y-6">
-            <div className="px-2">
-              <span className="font-display text-base font-extrabold tracking-tight text-[#161614] block">
-                EFA RESTO-LIVRO
-              </span>
-              <p className="text-xs font-semibold text-emerald-800 truncate mt-0.5">{etab.nom}</p>
-              <p className="text-[11px] font-mono text-stone-500">
-                Formule {etab.formule.toUpperCase()} · {etab.code_etablissement}
-              </p>
+            <div className="px-1 flex items-center gap-2.5">
+              <img
+                src="/logo-emblem.png"
+                alt="Logo EFA RESTO-LIVRO"
+                className="w-10 h-10 rounded-full object-contain shrink-0"
+              />
+              <div className="min-w-0">
+                <span className="font-display text-sm font-extrabold tracking-tight text-[#161614] block truncate">
+                  EFA RESTO-LIVRO
+                </span>
+                <p className="text-xs font-semibold text-emerald-800 truncate">{etab.nom}</p>
+                <p className="text-[11px] font-mono text-stone-500 truncate">
+                  {etab.formule.toUpperCase()} · {etab.code_etablissement}
+                </p>
+              </div>
             </div>
 
             <nav className="space-y-1">
@@ -1133,7 +1153,7 @@ export default function App() {
                   key={item.id}
                   type="button"
                   onClick={() => setActiveTab(item.id)}
-                  className={`w-full flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-colors ${
+                  className={`w-full flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-colors min-h-[48px] ${
                     activeTab === item.id
                       ? 'bg-[#0E8A55] text-white'
                       : 'text-stone-700 hover:bg-stone-100'
@@ -1158,16 +1178,16 @@ export default function App() {
                   setSelectedEmpId(employes[0]?.id || '');
                   setShowPinSwitch(true);
                 }}
-                className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-stone-300 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-stone-300 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 min-h-[48px]"
               >
                 <UserCheck className="w-3.5 h-3.5" />
-                Changer d’opérateur (PIN)
+                Changer (PIN)
               </button>
             )}
             <button
               type="button"
               onClick={handleSignOut}
-              className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-stone-200 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-50"
+              className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-stone-200 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-50 min-h-[48px]"
             >
               <LogOut className="w-3.5 h-3.5" />
               Déconnexion
@@ -1177,13 +1197,25 @@ export default function App() {
 
         {/* Main Viewport */}
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Compact Top Bar */}
-          <header className="border-b border-stone-200 bg-white px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-            <div className="min-w-0 flex items-center gap-3">
-              <span className="lg:hidden font-display text-sm font-extrabold text-[#161614] whitespace-nowrap">
-                {etab.nom}
-              </span>
-              <span className="hidden lg:inline text-xs text-stone-500">
+          {/* Top Bar with Small Logo on Left + Name */}
+          <header className="border-b border-stone-200 bg-white px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3">
+            <div className="min-w-0 flex items-center gap-2.5">
+              <div className="md:hidden flex items-center gap-2 min-w-0">
+                <img
+                  src="/logo-emblem.png"
+                  alt="Logo EFA RESTO-LIVRO"
+                  className="w-8 h-8 rounded-full object-contain shrink-0"
+                />
+                <div className="min-w-0">
+                  <span className="font-display text-xs font-extrabold text-[#161614] block leading-tight truncate">
+                    EFA RESTO-LIVRO
+                  </span>
+                  <span className="text-[11px] font-semibold text-emerald-800 block leading-tight truncate">
+                    {etab.nom}
+                  </span>
+                </div>
+              </div>
+              <span className="hidden md:inline text-xs text-stone-500 truncate">
                 {etab.ville || 'Afrique'} ·{' '}
                 {etab.statut_abonnement === 'essai'
                   ? `Essai gratuit jusqu’au ${new Date(etab.essai_fin).toLocaleDateString('fr-FR')}`
@@ -1195,10 +1227,11 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => etab.id && loadWorkspace(etab.id)}
-                className="inline-flex items-center gap-1 rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50"
+                className="inline-flex items-center justify-center gap-1 rounded-xl border border-stone-200 px-3 py-2 text-xs font-medium text-stone-600 hover:bg-stone-50 min-h-[48px]"
                 title="Actualiser"
+                aria-label="Actualiser"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
+                <RefreshCw className="w-4 h-4" />
                 <span className="hidden sm:inline">Actualiser</span>
               </button>
               <button
@@ -1207,15 +1240,15 @@ export default function App() {
                   setSelectedEmpId(employes[0]?.id || '');
                   setShowPinSwitch(true);
                 }}
-                className="lg:hidden inline-flex items-center gap-1 rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs font-semibold text-stone-700"
+                className="md:hidden inline-flex items-center justify-center gap-1 rounded-xl border border-stone-200 px-3 py-2 text-xs font-semibold text-stone-700 min-h-[48px]"
               >
-                <UserCheck className="w-3.5 h-3.5" />
+                <UserCheck className="w-4 h-4" />
                 PIN
               </button>
               <button
                 type="button"
                 onClick={handleSignOut}
-                className="lg:hidden p-1.5 rounded-lg border border-stone-200 text-stone-600"
+                className="md:hidden inline-flex items-center justify-center px-3 py-2 rounded-xl border border-stone-200 text-stone-600 min-h-[48px]"
                 aria-label="Déconnexion"
               >
                 <LogOut className="w-4 h-4" />
@@ -1223,7 +1256,7 @@ export default function App() {
             </div>
           </header>
 
-          <main className="flex-1 p-4 sm:p-6 pb-24 lg:pb-8 max-w-7xl w-full mx-auto">
+          <main className="flex-1 p-4 sm:p-6 pb-24 md:pb-8 max-w-7xl w-full mx-auto">
             {activeTab === 'serveur' && (
               <ServeurView
                 etab={etab}
@@ -1327,15 +1360,15 @@ export default function App() {
         </div>
       </div>
 
-      {/* Mobile Bottom Navigation Bar (Thumb-Zone, compact <= 15% height) */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-stone-200 bg-white/95 backdrop-blur-md">
+      {/* Smartphone Bottom Navigation Bar (< md) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-stone-200 bg-white/95 backdrop-blur-md">
         <div className="flex items-center justify-around h-16 px-1 overflow-x-auto">
           {navItems.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setActiveTab(item.id)}
-              className={`flex flex-col items-center justify-center min-w-[56px] px-2 py-1 text-[10px] font-semibold transition-colors ${
+              className={`flex flex-col items-center justify-center min-w-[56px] min-h-[48px] px-2 py-1 text-[10px] font-semibold transition-colors ${
                 activeTab === item.id ? 'text-[#0E8A55]' : 'text-stone-500'
               }`}
             >
@@ -1369,7 +1402,7 @@ export default function App() {
               <select
                 value={selectedEmpId}
                 onChange={(e) => setSelectedEmpId(e.target.value)}
-                className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm min-h-[48px]"
               >
                 {employes.map((emp) => (
                   <option key={emp.id} value={emp.id}>
@@ -1387,12 +1420,12 @@ export default function App() {
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
                 placeholder="••••"
-                className="w-full rounded-lg border border-stone-300 px-3 py-2 text-center font-mono text-lg tracking-widest"
+                className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-center font-mono text-lg tracking-widest min-h-[48px]"
               />
             </div>
             <button
               type="submit"
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] py-3 text-sm font-bold text-white"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] py-3 text-sm font-bold text-white min-h-[48px]"
             >
               <CreditCard className="w-4 h-4" />
               Valider le PIN

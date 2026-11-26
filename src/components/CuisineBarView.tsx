@@ -49,7 +49,7 @@ export const CuisineBarView: React.FC<CuisineBarViewProps> = ({
             Commandes validées par la caisse à préparer en temps réel ({kitchenOrders.length} active(s)).
           </p>
         </div>
-        <div className="flex items-center gap-1 rounded-xl bg-stone-100 p-1">
+        <div className="flex flex-wrap items-center gap-1 rounded-xl bg-stone-100 p-1 w-full sm:w-auto">
           {[
             {id: 'all', label: 'Tout voir'},
             {id: 'cuisine', label: 'Cuisine (Plats/Grill)'},
@@ -59,7 +59,7 @@ export const CuisineBarView: React.FC<CuisineBarViewProps> = ({
               key={t.id}
               type="button"
               onClick={() => setZone(t.id as typeof zone)}
-              className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap ${
+              className={`flex-1 sm:flex-initial rounded-lg px-3.5 py-2.5 text-xs font-semibold transition-colors whitespace-nowrap min-h-[48px] ${
                 zone === t.id ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600'
               }`}
             >

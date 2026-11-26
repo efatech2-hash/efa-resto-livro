@@ -36,11 +36,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | 'actif' | 'essai' | 'impaye'>('all');
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  // Pricing editor state
   const [priceDrafts, setPriceDrafts] = useState<Record<string, {mensuel: number; annuel: number}>>({});
   const [savingPriceId, setSavingPriceId] = useState<string | null>(null);
 
-  // Payment modal state
   const [payEtab, setPayEtab] = useState<Etablissement | null>(null);
   const [payFormule, setPayFormule] = useState<FormuleId>('resto');
   const [payCycle, setPayCycle] = useState<CycleAbonnement>('mensuel');
@@ -116,11 +114,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   const handleToggleBlock = async (etab: Etablissement) => {
     const nextBlock = !etab.est_bloque;
-    const nextStatus = nextBlock
-      ? 'bloque'
-      : etab.abonnement_fin
-      ? 'actif'
-      : 'essai';
+    const nextStatus = nextBlock ? 'bloque' : etab.abonnement_fin ? 'actif' : 'essai';
 
     const {error} = await supabase
       .from('etablissements')
@@ -188,21 +182,35 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     await loadAll();
   };
 
+  const renderStatusLabel = (etab: Etablissement, unpaid: boolean) => {
+    if (etab.est_bloque) return <span className="text-red-700 font-bold">Bloqué (Lecture seule)</span>;
+    if (unpaid) return <span className="text-amber-700 font-bold">Expiré / Non payé</span>;
+    if (etab.statut_abonnement === 'actif') return <span className="text-emerald-800 font-bold">Payé · Actif</span>;
+    return <span className="text-blue-700 font-bold">Essai gratuit 7j</span>;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-[#161614]">
-            Console Super-Admin EFA RESTO-LIVRO
-          </h1>
-          <p className="text-sm text-stone-500">
-            Supervision de tous les établissements, abonnements, blocages et tarification SaaS.
-          </p>
+        <div className="flex items-center gap-3">
+          <img
+            src="/logo-emblem.png"
+            alt="Logo EFA RESTO-LIVRO"
+            className="w-12 h-12 rounded-full object-contain border border-stone-200 bg-white shrink-0"
+          />
+          <div>
+            <h1 className="font-display text-xl sm:text-2xl font-bold text-[#161614]">
+              Console Super-Admin EFA RESTO-LIVRO
+            </h1>
+            <p className="text-xs sm:text-sm text-stone-500">
+              Supervision de tous les établissements, abonnements, blocages et tarification SaaS.
+            </p>
+          </div>
         </div>
         <button
           type="button"
           onClick={loadAll}
-          className="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 min-h-[40px]"
+          className="inline-flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-xs font-semibold text-stone-700 hover:bg-stone-50 min-h-[48px]"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Actualiser
@@ -210,16 +218,16 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       </div>
 
       {feedback && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900 flex items-center justify-between">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900 flex items-center justify-between gap-3">
           <span>{feedback}</span>
-          <button type="button" onClick={() => setFeedback(null)} className="text-xs underline">
+          <button type="button" onClick={() => setFeedback(null)} className="text-xs underline shrink-0 min-h-[40px] px-2">
             Fermer
           </button>
         </div>
       )}
 
-      {/* KPI Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* KPI Row: 1 col phone, 2 cols tablet, 4 cols desktop */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="rounded-xl border border-stone-200 bg-white p-5">
           <div className="flex items-center justify-between text-xs font-medium text-stone-500">
             <span>Revenu Total SaaS</span>
@@ -269,12 +277,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         </div>
       </div>
 
-      {/* Pricing Editor */}
+      {/* Pricing Editor: 1 col phone, 2 cols tablet, 3 cols desktop */}
       <section className="rounded-xl border border-stone-200 bg-white p-5">
         <h2 className="font-display text-lg font-bold text-[#161614]">
           Tarifs des Formules SaaS (modifiables en direct)
         </h2>
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {formules.map((f) => {
             const draft = priceDrafts[f.id] || {mensuel: f.prix_mensuel, annuel: f.prix_annuel};
             return (
@@ -295,7 +303,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                           [f.id]: {...draft, mensuel: Number(e.target.value)},
                         }))
                       }
-                      className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 font-mono text-sm tabular-nums"
+                      className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-2 font-mono text-sm tabular-nums min-h-[44px]"
                     />
                   </div>
                   <div>
@@ -309,7 +317,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                           [f.id]: {...draft, annuel: Number(e.target.value)},
                         }))
                       }
-                      className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 font-mono text-sm tabular-nums"
+                      className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-2 font-mono text-sm tabular-nums min-h-[44px]"
                     />
                   </div>
                 </div>
@@ -317,7 +325,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   type="button"
                   onClick={() => handleSaveFormulePrice(f)}
                   disabled={savingPriceId === f.id}
-                  className="w-full rounded-lg bg-[#161614] py-2 text-xs font-semibold text-white hover:bg-stone-800 disabled:opacity-60"
+                  className="w-full rounded-xl bg-[#161614] py-2.5 text-xs font-semibold text-white hover:bg-stone-800 disabled:opacity-60 min-h-[48px]"
                 >
                   {savingPriceId === f.id ? 'Enregistrement...' : 'Mettre à jour ce tarif'}
                 </button>
@@ -327,37 +335,37 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         </div>
       </section>
 
-      {/* Establishments Table */}
+      {/* Establishments Section */}
       <section className="rounded-xl border border-stone-200 bg-white overflow-hidden">
-        <div className="p-5 border-b border-stone-200 flex flex-wrap items-center justify-between gap-4">
+        <div className="p-4 sm:p-5 border-b border-stone-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <h2 className="font-display text-lg font-bold text-[#161614]">
             Tous les établissements ({filteredEtabs.length})
           </h2>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="relative w-full sm:w-56">
               <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Rechercher nom, code, ville..."
-                className="rounded-lg border border-stone-300 pl-9 pr-3 py-2 text-xs focus:border-emerald-700 focus:outline-none w-56"
+                className="w-full rounded-xl border border-stone-300 pl-9 pr-3 py-2.5 text-xs focus:border-emerald-700 focus:outline-none min-h-[44px]"
               />
             </div>
-            <div className="flex items-center gap-1 rounded-lg bg-stone-100 p-1">
+            <div className="grid grid-cols-2 sm:flex items-center gap-1 rounded-xl bg-stone-100 p-1">
               {(
                 [
                   {id: 'all', label: 'Tous'},
                   {id: 'actif', label: 'Payés'},
                   {id: 'essai', label: 'Essai 7j'},
-                  {id: 'impaye', label: 'Impayés / Bloqués'},
+                  {id: 'impaye', label: 'Impayés'},
                 ] as const
               ).map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => setStatusFilter(item.id)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors whitespace-nowrap ${
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors whitespace-nowrap min-h-[40px] ${
                     statusFilter === item.id ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600'
                   }`}
                 >
@@ -368,7 +376,70 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Mobile Cards View (< md) */}
+        <div className="md:hidden divide-y divide-stone-100">
+          {filteredEtabs.length === 0 ? (
+            <div className="p-8 text-center text-sm text-stone-500">
+              Aucun établissement trouvé pour ce filtre.
+            </div>
+          ) : (
+            filteredEtabs.map((etab) => {
+              const unpaid = isUnpaidOrExpired(etab);
+              const lastPay = latestPaymentByEtab.get(etab.id);
+              return (
+                <div key={etab.id} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="font-bold text-base text-[#161614]">{etab.nom}</h3>
+                      <p className="text-xs text-stone-500">
+                        {etab.ville || '—'} · <span className="font-mono">{etab.code_etablissement}</span>
+                      </p>
+                    </div>
+                    <div className="text-xs text-right">{renderStatusLabel(etab, unpaid)}</div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-[#FAF9F6] rounded-xl p-3">
+                    <div>
+                      <span className="text-stone-500 block">Formule</span>
+                      <strong className="uppercase">{etab.formule} · {etab.cycle_abonnement}</strong>
+                    </div>
+                    <div>
+                      <span className="text-stone-500 block">Dernier paiement</span>
+                      <strong className="font-mono tabular-nums">
+                        {lastPay ? `${formatFCFA(lastPay.montant)}` : 'Essai gratuit'}
+                      </strong>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPayEtab(etab);
+                        setPayFormule(etab.formule);
+                      }}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-xs font-semibold text-stone-800 min-h-[48px]"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      Encaisser
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleBlock(etab)}
+                      className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-bold text-white min-h-[48px] ${
+                        etab.est_bloque ? 'bg-[#0E8A55]' : 'bg-red-600'
+                      }`}
+                    >
+                      {etab.est_bloque ? <CheckCircle2 className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+                      {etab.est_bloque ? 'Activer' : 'Bloquer'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Tablet & Desktop Table View (>= md) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-[#FAF9F6] border-b border-stone-200 text-xs font-semibold text-stone-600">
               <tr>
@@ -406,17 +477,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       <td className="px-4 py-3 text-xs font-semibold uppercase text-stone-800">
                         {etab.formule} · {etab.cycle_abonnement}
                       </td>
-                      <td className="px-4 py-3 text-xs font-semibold">
-                        {etab.est_bloque ? (
-                          <span className="text-red-700">Bloqué (Lecture seule)</span>
-                        ) : unpaid ? (
-                          <span className="text-amber-700">Expiré / Non payé</span>
-                        ) : etab.statut_abonnement === 'actif' ? (
-                          <span className="text-emerald-800">Payé · Actif</span>
-                        ) : (
-                          <span className="text-blue-700">Essai gratuit 7j</span>
-                        )}
-                      </td>
+                      <td className="px-4 py-3 text-xs">{renderStatusLabel(etab, unpaid)}</td>
                       <td className="px-4 py-3 font-mono text-xs text-stone-600 tabular-nums">
                         {etab.statut_abonnement === 'actif' && etab.abonnement_fin
                           ? formatDateTime(etab.abonnement_fin)
@@ -433,7 +494,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                               setPayEtab(etab);
                               setPayFormule(etab.formule);
                             }}
-                            className="inline-flex items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                            className="inline-flex items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 min-h-[44px]"
                           >
                             <CreditCard className="w-3.5 h-3.5" />
                             Encaisser
@@ -441,7 +502,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                           <button
                             type="button"
                             onClick={() => handleToggleBlock(etab)}
-                            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white ${
+                            className={`inline-flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold text-white min-h-[44px] ${
                               etab.est_bloque
                                 ? 'bg-[#0E8A55] hover:bg-[#0B7145]'
                                 : 'bg-red-600 hover:bg-red-700'
@@ -480,13 +541,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             <h3 className="font-display text-lg font-bold text-[#161614]">
               Activer / Encaisser · {payEtab.nom}
             </h3>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">Formule</label>
                 <select
                   value={payFormule}
                   onChange={(e) => setPayFormule(e.target.value as FormuleId)}
-                  className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm min-h-[48px]"
                 >
                   {formules.map((f) => (
                     <option key={f.id} value={f.id}>
@@ -500,20 +561,20 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 <select
                   value={payCycle}
                   onChange={(e) => setPayCycle(e.target.value as CycleAbonnement)}
-                  className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm min-h-[48px]"
                 >
                   <option value="mensuel">Mensuel (30j)</option>
                   <option value="annuel">Annuel (365j · 2 mois offerts)</option>
                 </select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">Mode de paiement</label>
                 <select
                   value={payMode}
                   onChange={(e) => setPayMode(e.target.value as typeof payMode)}
-                  className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm min-h-[48px]"
                 >
                   <option value="Flooz">Flooz</option>
                   <option value="Moov Money">Moov Money</option>
@@ -529,11 +590,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   value={payRef}
                   onChange={(e) => setPayRef(e.target.value)}
                   placeholder="ID Transaction"
-                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm font-mono"
+                  className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm font-mono min-h-[48px]"
                 />
               </div>
             </div>
-            <div className="rounded-xl bg-[#FAF9F6] border border-stone-200 p-3 flex items-center justify-between text-sm">
+            <div className="rounded-xl bg-[#FAF9F6] border border-stone-200 p-3.5 flex items-center justify-between text-sm">
               <span className="text-stone-600">Montant à encaisser :</span>
               <span className="font-mono font-bold text-lg text-[#0E8A55] tabular-nums">
                 {formatFCFA(
@@ -547,14 +608,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => setPayEtab(null)}
-                className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700"
+                className="rounded-xl border border-stone-300 px-4 py-2.5 text-sm font-semibold text-stone-700 min-h-[48px]"
               >
                 Annuler
               </button>
               <button
                 type="submit"
                 disabled={submittingPay}
-                className="rounded-lg bg-[#0E8A55] px-5 py-2 text-sm font-semibold text-white hover:bg-[#0B7145]"
+                className="rounded-xl bg-[#0E8A55] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#0B7145] min-h-[48px]"
               >
                 {submittingPay ? 'Validation...' : 'Valider et Activer'}
               </button>

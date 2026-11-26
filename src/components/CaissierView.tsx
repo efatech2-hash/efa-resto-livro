@@ -59,7 +59,6 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  // Settle credit modal
   const [settleTarget, setSettleTarget] = useState<Paiement | null>(null);
   const [settleMode, setSettleMode] = useState<Exclude<ModePaiement, 'Credit'>>('Especes');
 
@@ -145,20 +144,20 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold text-[#161614]">Caisse & Encaissements</h1>
-          <p className="text-xs text-stone-500">
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-[#161614]">Caisse & Encaissements</h1>
+          <p className="text-xs sm:text-sm text-stone-500">
             Caissier actif : <strong className="text-[#161614]">{operatorName}</strong> · Recette du jour :{' '}
             <strong className="font-mono text-emerald-800 tabular-nums">{formatFCFA(totalToday)}</strong>
           </p>
         </div>
 
-        <div className="flex items-center gap-1 rounded-xl bg-stone-100 p-1">
+        <div className="flex flex-wrap items-center gap-1 rounded-xl bg-stone-100 p-1">
           <button
             type="button"
             onClick={() => setTab('queue')}
-            className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap ${
+            className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap min-h-[44px] ${
               tab === 'queue' ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600'
             }`}
           >
@@ -167,30 +166,30 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
           <button
             type="button"
             onClick={() => setTab('historique')}
-            className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap ${
+            className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap min-h-[44px] ${
               tab === 'historique' ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600'
             }`}
           >
-            Ventes du jour ({paidToday.length})
+            Ventes ({paidToday.length})
           </button>
           {!isBarOnly && (
             <button
               type="button"
               onClick={() => setTab('credit')}
-              className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap ${
+              className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors whitespace-nowrap min-h-[44px] ${
                 tab === 'credit' ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600'
               }`}
             >
-              Crédit Client ({openCredits.length})
+              Crédit ({openCredits.length})
             </button>
           )}
         </div>
       </div>
 
       {feedback && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900 flex items-center justify-between">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900 flex items-center justify-between gap-3">
           <span>{feedback}</span>
-          <button type="button" onClick={() => setFeedback(null)} className="underline">
+          <button type="button" onClick={() => setFeedback(null)} className="underline min-h-[40px] px-2 shrink-0">
             Fermer
           </button>
         </div>
@@ -224,7 +223,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                       </p>
                     </div>
                     <span
-                      className={`text-xs font-bold ${
+                      className={`text-xs font-bold shrink-0 ${
                         cmd.statut_caisse === 'EN_ATTENTE' ? 'text-amber-700' : 'text-emerald-800'
                       }`}
                     >
@@ -238,7 +237,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                         <span className="text-stone-700">
                           <strong className="font-mono tabular-nums">{it.quantite}×</strong> {it.nom}
                         </span>
-                        <span className="font-mono text-xs text-stone-600 tabular-nums">
+                        <span className="font-mono text-xs text-stone-600 tabular-nums shrink-0">
                           {formatFCFA(it.prix * it.quantite)}
                         </span>
                       </li>
@@ -267,8 +266,8 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                         onClick={() => handleValidate(cmd)}
                         className="col-span-2 inline-flex items-center justify-center gap-2 rounded-xl bg-[#161614] py-3 text-sm font-bold text-white hover:bg-stone-800 disabled:opacity-50 min-h-[48px]"
                       >
-                        <CheckCircle2 className="w-4 h-4" />
-                        VALIDER & GÉNÉRER BON
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>VALIDER & BON</span>
                       </button>
                     ) : (
                       <>
@@ -277,8 +276,8 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                           onClick={() => setBonModal(cmd)}
                           className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-stone-300 bg-white py-3 text-xs font-semibold text-stone-700 hover:bg-stone-50 min-h-[48px]"
                         >
-                          <Printer className="w-4 h-4" />
-                          Voir Bon
+                          <Printer className="w-4 h-4 shrink-0" />
+                          <span>Voir Bon</span>
                         </button>
                         <button
                           type="button"
@@ -286,8 +285,8 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                           onClick={() => openPaymentModal(cmd)}
                           className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0E8A55] py-3 text-xs font-bold text-white hover:bg-[#0B7145] disabled:opacity-50 min-h-[48px]"
                         >
-                          <Wallet className="w-4 h-4" />
-                          ENCAISSER
+                          <Wallet className="w-4 h-4 shrink-0" />
+                          <span>ENCAISSER</span>
                         </button>
                       </>
                     )}
@@ -301,7 +300,32 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
 
       {tab === 'historique' && (
         <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Mobile Cards (< md) */}
+          <div className="md:hidden divide-y divide-stone-100">
+            {paidToday.length === 0 ? (
+              <p className="p-8 text-center text-xs text-stone-500">
+                Aucun encaissement enregistré aujourd’hui.
+              </p>
+            ) : (
+              paidToday.map((p) => (
+                <div key={p.id} className="p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-bold text-sm text-[#161614]">{p.mode_paiement}</p>
+                    <p className="text-xs text-stone-500 truncate">
+                      {p.caissier_nom} · {p.client_nom || 'Comptoir'}
+                    </p>
+                    <p className="font-mono text-[11px] text-stone-400 mt-0.5">{formatDateTime(p.created_at)}</p>
+                  </div>
+                  <span className="font-mono text-base font-extrabold text-emerald-800 tabular-nums shrink-0">
+                    {formatFCFA(p.montant)}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Tablet & Desktop Table (>= md) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-[#FAF9F6] border-b border-stone-200 text-xs font-semibold text-stone-600">
                 <tr>
@@ -346,16 +370,50 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
 
       {tab === 'credit' && !isBarOnly && (
         <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden">
-          <div className="p-5 border-b border-stone-200 flex items-center justify-between">
+          <div className="p-4 sm:p-5 border-b border-stone-200 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="font-display text-lg font-bold text-[#161614]">Crédits Clients à recouvrer</h2>
               <p className="text-xs text-stone-500">Règlement fin du mois par Espèces ou Mobile Money.</p>
             </div>
-            <span className="font-mono text-lg font-bold text-amber-700 tabular-nums">
+            <span className="font-mono text-base sm:text-lg font-bold text-amber-700 tabular-nums">
               Total dû : {formatFCFA(openCredits.reduce((s, c) => s + c.montant, 0))}
             </span>
           </div>
-          <div className="overflow-x-auto">
+
+          {/* Mobile Cards (< md) */}
+          <div className="md:hidden divide-y divide-stone-100">
+            {openCredits.length === 0 ? (
+              <p className="p-8 text-center text-xs text-stone-500">Aucun crédit client en cours.</p>
+            ) : (
+              openCredits.map((c) => (
+                <div key={c.id} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-base text-[#161614]">{c.client_nom || 'Client'}</p>
+                      <p className="text-xs text-stone-500 font-mono">
+                        {c.client_tel || 'Sans tél'} · {formatDateTime(c.created_at)}
+                      </p>
+                    </div>
+                    <span className="font-mono text-base font-extrabold text-amber-800 tabular-nums">
+                      {formatFCFA(c.montant)}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={readOnly}
+                    onClick={() => setSettleTarget(c)}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] py-3 text-xs font-bold text-white min-h-[48px]"
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    Régler ce crédit
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Tablet & Desktop Table (>= md) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-[#FAF9F6] border-b border-stone-200 text-xs font-semibold text-stone-600">
                 <tr>
@@ -391,7 +449,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                           type="button"
                           disabled={readOnly}
                           onClick={() => setSettleTarget(c)}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#0E8A55] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0B7145]"
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-[#0E8A55] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#0B7145] min-h-[44px]"
                         >
                           <UserCheck className="w-3.5 h-3.5" />
                           Régler
@@ -406,18 +464,23 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
         </div>
       )}
 
-      {/* Modal Bon de Commande généré à la validation */}
+      {/* Modal Bon de Commande généré à la validation (avec Logo officiel en haut) */}
       {bonModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-2xl border border-stone-200 bg-white p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-stone-200 pb-3 no-print">
               <span className="text-xs font-semibold text-emerald-800">Bon de commande généré (Stock déduit)</span>
-              <button type="button" onClick={() => setBonModal(null)} className="text-stone-400 hover:text-stone-700">
+              <button type="button" onClick={() => setBonModal(null)} className="text-stone-400 hover:text-stone-700 min-h-[40px] min-w-[40px] flex items-center justify-center">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="font-mono text-xs space-y-2 border border-dashed border-stone-300 rounded-xl p-4 bg-[#FAF9F6]">
-              <div className="text-center border-b border-dashed border-stone-300 pb-2">
+              <div className="text-center border-b border-dashed border-stone-300 pb-3 flex flex-col items-center">
+                <img
+                  src="/logo-efa-clean.png"
+                  alt="Logo EFA RESTO-LIVRO"
+                  className="w-24 h-auto object-contain mb-2"
+                />
                 <p className="font-bold text-sm text-[#161614]">{etab.nom}</p>
                 <p>BON DE COMMANDE N° {bonModal.numero_bon}</p>
                 <p>{formatDateTime(bonModal.created_at)}</p>
@@ -441,7 +504,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-stone-300 py-2.5 text-xs font-semibold text-stone-700"
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-stone-300 py-2.5 text-xs font-semibold text-stone-700 min-h-[48px]"
               >
                 <Printer className="w-4 h-4" />
                 Imprimer Bon
@@ -453,7 +516,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                   setBonModal(null);
                   openPaymentModal(target);
                 }}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0E8A55] py-2.5 text-xs font-bold text-white"
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0E8A55] py-2.5 text-xs font-bold text-white min-h-[48px]"
               >
                 <Wallet className="w-4 h-4" />
                 Encaisser
@@ -474,7 +537,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
               <h3 className="font-display text-lg font-bold text-[#161614]">
                 Encaisser {payModal.numero_bon} · {payModal.cible}
               </h3>
-              <button type="button" onClick={() => setPayModal(null)}>
+              <button type="button" onClick={() => setPayModal(null)} className="min-h-[40px] min-w-[40px] flex items-center justify-center">
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
@@ -493,14 +556,14 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setPayMode('SUR_CHAMBRE')}
-                    className={`col-span-2 rounded-xl border px-3 py-2.5 text-xs font-bold flex items-center justify-center gap-2 min-h-[44px] ${
+                    className={`col-span-2 rounded-xl border px-3 py-2.5 text-xs font-bold flex items-center justify-center gap-2 min-h-[48px] ${
                       payMode === 'SUR_CHAMBRE'
                         ? 'border-blue-700 bg-blue-50 text-blue-900'
                         : 'border-stone-200 text-stone-700'
                     }`}
                   >
-                    <BedDouble className="w-4 h-4" />
-                    Ajouter à la facture Chambre (paiement au Check-out)
+                    <BedDouble className="w-4 h-4 shrink-0" />
+                    <span>Ajouter à la facture Chambre</span>
                   </button>
                 )}
                 {(['Especes', 'Flooz', 'Moov Money', 'Orange Money', 'Wave'] as const).map((m) => (
@@ -508,7 +571,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                     key={m}
                     type="button"
                     onClick={() => setPayMode(m)}
-                    className={`rounded-xl border px-3 py-2.5 text-xs font-semibold min-h-[44px] ${
+                    className={`rounded-xl border px-3 py-2.5 text-xs font-semibold min-h-[48px] ${
                       payMode === m
                         ? 'border-emerald-700 bg-emerald-50 text-emerald-900'
                         : 'border-stone-200 text-stone-700 hover:bg-stone-50'
@@ -521,7 +584,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setPayMode('Credit')}
-                    className={`rounded-xl border px-3 py-2.5 text-xs font-semibold min-h-[44px] ${
+                    className={`rounded-xl border px-3 py-2.5 text-xs font-semibold min-h-[48px] ${
                       payMode === 'Credit'
                         ? 'border-amber-700 bg-amber-50 text-amber-900'
                         : 'border-stone-200 text-stone-700 hover:bg-stone-50'
@@ -534,7 +597,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
             </div>
 
             {payMode === 'Credit' && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1">Nom du client *</label>
                   <input
@@ -543,7 +606,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                     value={creditNom}
                     onChange={(e) => setCreditNom(e.target.value)}
                     placeholder="Nom complet"
-                    className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm min-h-[48px]"
                   />
                 </div>
                 <div>
@@ -553,7 +616,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                     value={creditTel}
                     onChange={(e) => setCreditTel(e.target.value)}
                     placeholder="+228..."
-                    className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm min-h-[48px]"
                   />
                 </div>
               </div>
@@ -569,7 +632,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                   value={payRef}
                   onChange={(e) => setPayRef(e.target.value)}
                   placeholder="Ex : TXN 984512"
-                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm font-mono"
+                  className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm font-mono min-h-[48px]"
                 />
               </div>
             )}
@@ -577,7 +640,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
             <button
               type="submit"
               disabled={busyId === payModal.id}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] py-3.5 text-sm font-bold text-white hover:bg-[#0B7145] min-h-[48px]"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] py-3.5 text-sm font-bold text-white hover:bg-[#0B7145] min-h-[52px]"
             >
               <CreditCard className="w-4 h-4" />
               {payMode === 'SUR_CHAMBRE' ? 'Imputé sur la chambre' : 'Valider et Éditer Ticket'}
@@ -586,18 +649,23 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
         </div>
       )}
 
-      {/* Ticket de Caisse final */}
+      {/* Ticket de Caisse final (avec Logo officiel en haut) */}
       {ticketModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-2xl border border-stone-200 bg-white p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between no-print">
               <span className="text-xs font-bold text-emerald-800">Ticket de caisse enregistré</span>
-              <button type="button" onClick={() => setTicketModal(null)}>
+              <button type="button" onClick={() => setTicketModal(null)} className="min-h-[40px] min-w-[40px] flex items-center justify-center">
                 <X className="w-5 h-5 text-stone-400" />
               </button>
             </div>
             <div className="font-mono text-xs space-y-2 border border-dashed border-stone-300 rounded-xl p-4 bg-[#FAF9F6]">
-              <div className="text-center border-b border-dashed border-stone-300 pb-2">
+              <div className="text-center border-b border-dashed border-stone-300 pb-3 flex flex-col items-center">
+                <img
+                  src="/logo-efa-clean.png"
+                  alt="Logo EFA RESTO-LIVRO"
+                  className="w-24 h-auto object-contain mb-2"
+                />
                 <p className="font-bold text-sm text-[#161614]">{etab.nom}</p>
                 <p>{etab.ville || ''} {etab.telephone ? `· ${etab.telephone}` : ''}</p>
                 <p>TICKET CAISSE · {ticketModal.commande.numero_bon}</p>
@@ -626,7 +694,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-stone-300 py-2.5 text-xs font-semibold text-stone-700"
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-stone-300 py-2.5 text-xs font-semibold text-stone-700 min-h-[48px]"
               >
                 <Printer className="w-4 h-4" />
                 Imprimer
@@ -634,7 +702,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
               <button
                 type="button"
                 onClick={() => setTicketModal(null)}
-                className="rounded-xl bg-[#161614] py-2.5 text-xs font-semibold text-white"
+                className="rounded-xl bg-[#161614] py-2.5 text-xs font-semibold text-white min-h-[48px]"
               >
                 Terminer
               </button>
@@ -659,7 +727,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                   key={m}
                   type="button"
                   onClick={() => setSettleMode(m)}
-                  className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
+                  className={`rounded-xl border px-3 py-2.5 text-xs font-semibold min-h-[48px] ${
                     settleMode === m ? 'border-emerald-700 bg-emerald-50 text-emerald-900' : 'border-stone-200'
                   }`}
                 >
@@ -671,7 +739,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
               <button
                 type="button"
                 onClick={() => setSettleTarget(null)}
-                className="rounded-lg border border-stone-300 px-4 py-2 text-xs font-semibold"
+                className="rounded-xl border border-stone-300 px-4 py-2.5 text-xs font-semibold min-h-[48px]"
               >
                 Annuler
               </button>
@@ -679,7 +747,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                 type="button"
                 onClick={handleConfirmSettle}
                 disabled={busyId === settleTarget.id}
-                className="rounded-lg bg-[#0E8A55] px-4 py-2 text-xs font-bold text-white"
+                className="rounded-xl bg-[#0E8A55] px-4 py-2.5 text-xs font-bold text-white min-h-[48px]"
               >
                 Confirmer règlement
               </button>
