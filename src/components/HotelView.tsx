@@ -922,7 +922,7 @@ export const HotelView: React.FC<HotelViewProps> = ({
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <img
-                  src="/logo-efa-clean.png"
+                  src="/pwa-192x192.png"
                   alt="EFA RESTO-LIVRO"
                   className="h-10 w-auto object-contain shrink-0"
                 />

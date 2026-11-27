@@ -226,7 +226,7 @@ export const SplashScreen: React.FC = () => (
     <div className="h-6" />
     <div className="flex flex-col items-center text-center space-y-5">
       <img
-        src="/logo-efa-clean.png"
+        src="/pwa-192x192.png"
         alt="EFA RESTO-LIVRO"
         className="w-56 sm:w-64 h-auto object-contain"
       />

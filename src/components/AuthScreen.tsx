@@ -302,7 +302,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           {/* Official Logo Centered at Top of Login / Register */}
           <div className="flex flex-col items-center pb-5 mb-5 border-b border-stone-100">
             <img
-              src="/logo-efa-clean.png"
+              src="/pwa-192x192.png"
               alt="EFA RESTO-LIVRO Officiel"
               className="w-40 sm:w-44 h-auto object-contain"
             />

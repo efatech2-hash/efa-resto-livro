@@ -478,7 +478,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
             <div className="font-mono text-xs space-y-2 border border-dashed border-stone-300 rounded-xl p-4 bg-[#FAF9F6]">
               <div className="text-center border-b border-dashed border-stone-300 pb-3 flex flex-col items-center">
                 <img
-                  src="/logo-efa-clean.png"
+                  src="/pwa-192x192.png"
                   alt="Logo EFA RESTO-LIVRO"
                   className="w-24 h-auto object-contain mb-2"
                 />
@@ -663,7 +663,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
             <div className="font-mono text-xs space-y-2 border border-dashed border-stone-300 rounded-xl p-4 bg-[#FAF9F6]">
               <div className="text-center border-b border-dashed border-stone-300 pb-3 flex flex-col items-center">
                 <img
-                  src="/logo-efa-clean.png"
+                  src="/pwa-192x192.png"
                   alt="Logo EFA RESTO-LIVRO"
                   className="w-24 h-auto object-contain mb-2"
                 />

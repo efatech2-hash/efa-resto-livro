@@ -1471,7 +1471,7 @@ export default function App() {
       <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center p-4">
         <div className="w-full max-w-sm rounded-2xl border border-stone-200 bg-white p-7 text-center space-y-4 shadow-sm">
           <img
-            src="/logo-efa-clean.png"
+            src="/pwa-192x192.png"
             alt="EFA RESTO-LIVRO"
             className="w-36 h-auto mx-auto object-contain"
           />
@@ -1510,7 +1510,7 @@ export default function App() {
           <div className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 sm:p-8 shadow-sm space-y-5">
             <div className="flex flex-col items-center text-center space-y-2 border-b border-stone-100 pb-5">
               <img
-                src="/logo-efa-clean.png"
+                src="/pwa-192x192.png"
                 alt="EFA RESTO-LIVRO"
                 className="w-36 h-auto object-contain"
               />
