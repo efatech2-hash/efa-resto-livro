@@ -1,11 +1,14 @@
 import React, {useMemo, useState} from 'react';
 import {
   AlertTriangle,
+  Ban,
+  CheckCircle2,
   Copy,
-  CreditCard,
+  ExternalLink,
+  MessageCircle,
   PackagePlus,
   Plus,
-  Sparkles,
+  Trash2,
   Users,
   UtensilsCrossed,
   X,
@@ -13,10 +16,11 @@ import {
 import {
   formatDateTime,
   formatFCFA,
+  formatFormuleName,
+  getWhatsAppFormuleUrl,
   PHOTO_PRESETS,
   ROLE_LABELS,
   type Approvisionnement,
-  type CycleAbonnement,
   type Employe,
   type Etablissement,
   type Formule,
@@ -42,13 +46,9 @@ interface MenuStockViewProps {
   onCreateStock: (s: Omit<StockItem, 'id' | 'updated_at'>) => Promise<{ok: boolean; error?: string}>;
   onApprovisionner: (a: Omit<Approvisionnement, 'id' | 'created_at'>) => Promise<{ok: boolean; error?: string}>;
   onCreateEmploye: (e: Omit<Employe, 'id' | 'created_at' | 'profil_id' | 'actif'>) => Promise<{ok: boolean; error?: string}>;
+  onToggleEmployeActif: (emp: Employe) => Promise<{ok: boolean; error?: string}>;
+  onDeleteEmploye: (emp: Employe) => Promise<{ok: boolean; error?: string}>;
   onUpdateEtabConfig: (patch: Partial<Etablissement>) => Promise<{ok: boolean; error?: string}>;
-  onPayAbonnement: (params: {
-    formule: FormuleId;
-    cycle: CycleAbonnement;
-    mode: 'Flooz' | 'Moov Money' | 'Orange Money' | 'Wave';
-    reference: string;
-  }) => Promise<{ok: boolean; error?: string}>;
 }
 
 export const MenuStockView: React.FC<MenuStockViewProps> = ({
@@ -66,8 +66,9 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
   onCreateStock,
   onApprovisionner,
   onCreateEmploye,
+  onToggleEmployeActif,
+  onDeleteEmploye,
   onUpdateEtabConfig,
-  onPayAbonnement,
 }) => {
   const isBarOnly = etab.formule === 'bar';
   const [subTab, setSubTab] = useState<'menu' | 'stock' | 'equipe' | 'abonnement'>('menu');
@@ -98,12 +99,14 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
   const [approPrixUnit, setApproPrixUnit] = useState(500);
   const [approFournisseur, setApproFournisseur] = useState('');
 
-  // Employe form
+  // Employe form & management
   const [showNewEmp, setShowNewEmp] = useState(false);
   const [eNom, setENom] = useState('');
   const [eTel, setETel] = useState('');
   const [eRole, setERole] = useState<Employe['role']>('serveur');
   const [ePin, setEPin] = useState('1234');
+  const [confirmDeleteEmpId, setConfirmDeleteEmpId] = useState<string | null>(null);
+  const [empBusyId, setEmpBusyId] = useState<string | null>(null);
 
   // Tables & Delivery zones
   const [nbTablesDraft, setNbTablesDraft] = useState(etab.nb_tables);
@@ -111,12 +114,8 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
   const [newQuartier, setNewQuartier] = useState('');
   const [newFrais, setNewFrais] = useState(500);
 
-  // Abonnement payment
+  // Formules selected for WhatsApp info panel
   const [subFormule, setSubFormule] = useState<FormuleId>(etab.formule);
-  const [subCycle, setSubCycle] = useState<CycleAbonnement>('mensuel');
-  const [subMode, setSubMode] = useState<'Flooz' | 'Moov Money' | 'Orange Money' | 'Wave'>('Flooz');
-  const [subRef, setSubRef] = useState('');
-  const [payingSub, setPayingSub] = useState(false);
 
   const lowStockItems = useMemo(
     () => stock.filter((s) => Number(s.quantite) <= Number(s.seuil_alerte)),
@@ -192,13 +191,18 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
   const handleAddEmploye = async (e: React.FormEvent) => {
     e.preventDefault();
     if (readOnly) return;
+    const cleanPin = ePin.replace(/\D/g, '').slice(0, 4);
+    if (!/^\d{4}$/.test(cleanPin)) {
+      setFeedback('Le code PIN doit comporter exactement 4 chiffres.');
+      return;
+    }
     const res = await onCreateEmploye({
       etablissement_id: etab.id,
       nom: eNom.trim(),
       telephone: eTel.trim() || null,
       email: null,
       role: eRole,
-      pin_code: ePin.trim() || '1234',
+      pin_code: cleanPin,
     });
     if (!res.ok) {
       setFeedback(res.error || 'Erreur ajout employé');
@@ -207,30 +211,37 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
     setShowNewEmp(false);
     setENom('');
     setETel('');
-    setFeedback(`Employé « ${eNom} » ajouté (PIN : ${ePin}).`);
+    setEPin('1234');
+    setFeedback(`Employé « ${eNom} » ajouté (PIN : ${cleanPin}).`);
   };
 
-  const handlePaySub = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPayingSub(true);
-    const res = await onPayAbonnement({
-      formule: subFormule,
-      cycle: subCycle,
-      mode: subMode,
-      reference: subRef.trim() || `MM-${Date.now().toString().slice(-6)}`,
-    });
-    setPayingSub(false);
+  const handleToggleEmp = async (emp: Employe) => {
+    if (readOnly) return;
+    setEmpBusyId(emp.id);
+    const res = await onToggleEmployeActif(emp);
+    setEmpBusyId(null);
     if (!res.ok) {
-      setFeedback(res.error || 'Erreur paiement abonnement');
+      setFeedback(res.error || 'Impossible de modifier le statut');
       return;
     }
-    setSubRef('');
-    setFeedback(`Abonnement ${subFormule.toUpperCase()} activé ! Toutes les limites sont débloquées.`);
+    setFeedback(`${emp.nom} est maintenant ${emp.actif ? 'bloqué(e)' : 'débloqué(e)'}.`);
   };
 
-  const targetFormule = formules.find((f) => f.id === subFormule);
-  const subPrice =
-    subCycle === 'mensuel' ? targetFormule?.prix_mensuel || 0 : targetFormule?.prix_annuel || 0;
+  const handleDeleteEmp = async (emp: Employe) => {
+    if (readOnly) return;
+    setEmpBusyId(emp.id);
+    const res = await onDeleteEmploye(emp);
+    setEmpBusyId(null);
+    setConfirmDeleteEmpId(null);
+    if (!res.ok) {
+      setFeedback(res.error || 'Impossible de supprimer l’employé');
+      return;
+    }
+    setFeedback(`Employé « ${emp.nom} » supprimé.`);
+  };
+
+  const targetFormule = formules.find((f) => f.id === subFormule) || formules[0];
+  const activeEmployesCount = employes.filter((emp) => emp.actif).length;
 
   return (
     <div className="space-y-6">
@@ -241,7 +252,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
           </h1>
           <p className="text-xs text-stone-500">
             Code d’accès équipe : <strong className="font-mono text-[#161614]">{etab.code_etablissement}</strong> ·{' '}
-            Formule <strong className="uppercase">{etab.formule}</strong>
+            Formules <strong className="uppercase">{etab.formule}</strong>
           </p>
         </div>
 
@@ -249,8 +260,8 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
           {[
             {id: 'menu', label: `Menu (${menus.length}${formuleObj.max_produits ? `/${formuleObj.max_produits}` : ''})`},
             {id: 'stock', label: `Stock (${stock.length})`},
-            {id: 'equipe', label: `Équipe & Config (${employes.length}/${formuleObj.max_employes})`},
-            {id: 'abonnement', label: 'Abonnement & Upgrade'},
+            {id: 'equipe', label: `Équipe & Config (${activeEmployesCount}/${formuleObj.max_employes})`},
+            {id: 'abonnement', label: 'Formules & Abonnement'},
           ].map((t) => (
             <button
               key={t.id}
@@ -281,7 +292,7 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-stone-600">
               {isBarOnly
-                ? 'Formule BAR : Boissons uniquement (max 30 produits).'
+                ? 'Formules BAR : Boissons uniquement (max 30 produits).'
                 : `Plats, Grillades et Boissons · Recettes liées au stock pour déduction automatique.`}
             </p>
             {!readOnly && (
@@ -528,21 +539,21 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
       {subTab === 'equipe' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-7 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="font-display text-lg font-bold text-[#161614]">
-                  Employés ({employes.length} / {formuleObj.max_employes})
+                  Employés ({activeEmployesCount} actifs / {formuleObj.max_employes})
                 </h2>
                 <p className="text-xs text-stone-500">
-                  Chaque employé dispose d’un PIN pour changer de poste rapidement sur la caisse/tablette.
+                  Chaque employé clique sur son nom puis entre son code PIN à 4 chiffres (sans e-mail).
                 </p>
               </div>
               {!readOnly && (
                 <button
                   type="button"
-                  disabled={employes.length >= formuleObj.max_employes}
+                  disabled={activeEmployesCount >= formuleObj.max_employes}
                   onClick={() => setShowNewEmp(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#0E8A55] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#0E8A55] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50 min-h-[48px]"
                 >
                   <Users className="w-4 h-4" />
                   Ajouter Employé
@@ -551,19 +562,96 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
             </div>
 
             <div className="rounded-2xl border border-stone-200 bg-white divide-y divide-stone-100">
-              {employes.map((emp) => (
-                <div key={emp.id} className="p-4 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="font-semibold text-sm text-[#161614]">{emp.nom}</p>
-                    <p className="text-xs text-stone-500">
-                      {ROLE_LABELS[emp.role]} · {emp.telephone || 'Sans téléphone'}
-                    </p>
+              {employes.map((emp) => {
+                const isPatronRow = emp.role === 'patron';
+                const isConfirmDelete = confirmDeleteEmpId === emp.id;
+                return (
+                  <div
+                    key={emp.id}
+                    className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                      !emp.actif ? 'bg-red-50/40' : ''
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className={`font-semibold text-sm ${emp.actif ? 'text-[#161614]' : 'text-stone-400 line-through'}`}>
+                          {emp.nom}
+                        </p>
+                        {!emp.actif && (
+                          <span className="rounded-md bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-700">
+                            Bloqué
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-stone-500">
+                        {ROLE_LABELS[emp.role]} · {emp.telephone || 'Sans téléphone'}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <div className="font-mono text-xs bg-stone-100 rounded-lg px-2.5 py-2 text-stone-700">
+                        PIN : {emp.pin_code}
+                      </div>
+
+                      {!isPatronRow && !readOnly && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={empBusyId === emp.id}
+                            onClick={() => handleToggleEmp(emp)}
+                            className={`inline-flex items-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold min-h-[44px] ${
+                              emp.actif
+                                ? 'border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
+                                : 'bg-[#0E8A55] text-white hover:bg-[#0B7145]'
+                            }`}
+                          >
+                            {emp.actif ? (
+                              <>
+                                <Ban className="w-3.5 h-3.5" />
+                                Bloquer
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Débloquer
+                              </>
+                            )}
+                          </button>
+
+                          {isConfirmDelete ? (
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={empBusyId === emp.id}
+                                onClick={() => handleDeleteEmp(emp)}
+                                className="rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white min-h-[44px]"
+                              >
+                                Confirmer
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteEmpId(null)}
+                                className="rounded-xl border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700 min-h-[44px]"
+                              >
+                                Annuler
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteEmpId(emp.id)}
+                              className="inline-flex items-center gap-1 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 min-h-[44px]"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Supprimer
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="font-mono text-xs bg-stone-100 rounded-lg px-2.5 py-1 text-stone-700">
-                    PIN : {emp.pin_code}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -686,27 +774,32 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
         </div>
       )}
 
-      {/* TAB 4: ABONNEMENT & UPGRADE */}
+      {/* TAB 4: FORMULES & ABONNEMENT (Paiement manuel WhatsApp EFA Technologies) */}
       {subTab === 'abonnement' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-3 gap-4">
             {formules.map((f) => {
               const isCurrent = etab.formule === f.id;
               const isChosen = subFormule === f.id;
+              const displayNom = formatFormuleName(f.nom);
               return (
-                <button
+                <div
                   key={f.id}
-                  type="button"
                   onClick={() => setSubFormule(f.id)}
-                  className={`text-left rounded-2xl border p-5 transition-all flex flex-col justify-between ${
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') setSubFormule(f.id);
+                  }}
+                  className={`cursor-pointer text-left rounded-2xl border p-5 transition-all flex flex-col justify-between gap-4 ${
                     isChosen
                       ? 'border-emerald-700 bg-white ring-2 ring-emerald-700/20'
                       : 'border-stone-200 bg-white hover:border-stone-300'
                   }`}
                 >
                   <div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-display font-bold text-base text-[#161614]">{f.nom}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-display font-bold text-base text-[#161614]">{displayNom}</span>
                       {isCurrent && <span className="text-[11px] font-bold text-emerald-800">Actuelle</span>}
                     </div>
                     <p className="mt-1 text-xs text-stone-500">{f.description}</p>
@@ -717,94 +810,75 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
                     <p className="font-mono text-xs text-emerald-800 tabular-nums">
                       {formatFCFA(f.prix_annuel)}/an
                     </p>
+                    <div className="mt-4 pt-3 border-t border-stone-100 text-[11px] text-stone-600 space-y-1">
+                      <p>{f.max_employes} employés · {f.max_appareils} appareils</p>
+                      <p>{f.max_tables ? `${f.max_tables} tables` : 'Tables illimitées'}</p>
+                      <p>{f.max_produits ? `${f.max_produits} produits` : 'Produits illimités'}</p>
+                      <p>{f.max_chambres > 0 ? `Hôtel ${f.max_chambres} chambres` : 'Sans hôtel'}</p>
+                    </div>
                   </div>
-                  <div className="mt-4 pt-3 border-t border-stone-100 text-[11px] text-stone-600 space-y-1">
-                    <p>{f.max_employes} employés · {f.max_appareils} appareils</p>
-                    <p>{f.max_tables ? `${f.max_tables} tables` : 'Tables illimitées'}</p>
-                    <p>{f.max_produits ? `${f.max_produits} produits` : 'Produits illimités'}</p>
-                    <p>{f.max_chambres > 0 ? `Hôtel ${f.max_chambres} chambres` : 'Sans hôtel'}</p>
-                  </div>
-                </button>
+
+                  <a
+                    href={getWhatsAppFormuleUrl(f.nom)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] px-4 py-3 text-xs font-bold text-white hover:bg-[#0B7145] min-h-[48px]"
+                  >
+                    <MessageCircle className="w-4 h-4 shrink-0" />
+                    <span>Payer</span>
+                    <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                  </a>
+                </div>
               );
             })}
           </div>
 
-          <form
-            onSubmit={handlePaySub}
-            className="lg:col-span-5 rounded-2xl border border-stone-200 bg-white p-6 space-y-4"
-          >
+          <div className="lg:col-span-4 rounded-2xl border border-stone-200 bg-white p-6 space-y-4">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-[#0E8A55]" />
+              <MessageCircle className="w-5 h-5 text-[#0E8A55]" />
               <h3 className="font-display text-lg font-bold text-[#161614]">
-                Payer / Upgrader immédiatement
+                Activation des Formules via WhatsApp
               </h3>
             </div>
-            <p className="text-xs text-stone-500">
-              Statut actuel : <strong className="uppercase">{etab.statut_abonnement}</strong> · Essai jusqu’au{' '}
-              <span className="font-mono">{formatDateTime(etab.essai_fin)}</span>
+            <p className="text-xs text-stone-600 leading-relaxed">
+              Le paiement s’effectue manuellement avec l’équipe <strong>EFA Technologies</strong> (Mixx by Yas, Moov Money, Orange Money, Wave ou Espèces). Cliquez sur <strong>Payer</strong> sur les Formules de votre choix pour ouvrir WhatsApp.
             </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setSubCycle('mensuel')}
-                className={`rounded-xl border py-2.5 text-xs font-semibold min-h-[48px] ${
-                  subCycle === 'mensuel' ? 'border-emerald-700 bg-emerald-50 text-emerald-900' : 'border-stone-200'
-                }`}
+            <div className="rounded-xl bg-[#FAF9F6] border border-stone-200 p-4 space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-stone-500">Statut actuel :</span>
+                <strong className="uppercase text-[#161614]">{etab.statut_abonnement}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-500">Formules actuelles :</span>
+                <strong className="uppercase text-emerald-800">{etab.formule}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-500">Code établissement :</span>
+                <strong className="font-mono text-[#161614]">{etab.code_etablissement}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-500">Échéance essai/abo :</span>
+                <strong className="font-mono text-[#161614]">
+                  {formatDateTime(etab.abonnement_fin || etab.essai_fin)}
+                </strong>
+              </div>
+            </div>
+            {targetFormule && (
+              <a
+                href={getWhatsAppFormuleUrl(targetFormule.nom)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] py-3.5 px-4 text-sm font-bold text-white hover:bg-[#0B7145] min-h-[48px]"
               >
-                Mensuel (30 jours)
-              </button>
-              <button
-                type="button"
-                onClick={() => setSubCycle('annuel')}
-                className={`rounded-xl border py-2.5 text-xs font-semibold min-h-[48px] ${
-                  subCycle === 'annuel' ? 'border-emerald-700 bg-emerald-50 text-emerald-900' : 'border-stone-200'
-                }`}
-              >
-                Annuel (2 mois offerts)
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {(['Flooz', 'Moov Money', 'Orange Money', 'Wave'] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setSubMode(m)}
-                  className={`rounded-xl border py-2.5 text-xs font-semibold min-h-[48px] ${
-                    subMode === m ? 'border-emerald-700 bg-emerald-50 text-emerald-900' : 'border-stone-200'
-                  }`}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Référence transaction Mobile Money *
-              </label>
-              <input
-                type="text"
-                required
-                value={subRef}
-                onChange={(e) => setSubRef(e.target.value)}
-                placeholder="Ex : TXN-2026-8841"
-                className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm font-mono min-h-[48px]"
-              />
-            </div>
-            <div className="rounded-xl bg-[#FAF9F6] border border-stone-200 p-3.5 flex items-center justify-between">
-              <span className="text-xs font-semibold text-stone-600">Total à régler ({subFormule.toUpperCase()})</span>
-              <span className="font-mono text-xl font-extrabold text-[#0E8A55] tabular-nums">
-                {formatFCFA(subPrice)}
-              </span>
-            </div>
-            <button
-              type="submit"
-              disabled={payingSub}
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] py-3.5 text-sm font-bold text-white hover:bg-[#0B7145] min-h-[48px]"
-            >
-              <CreditCard className="w-4 h-4" />
-              {payingSub ? 'Activation...' : 'Confirmer & Débloquer la formule'}
-            </button>
-          </form>
+                <MessageCircle className="w-4 h-4" />
+                Payer {formatFormuleName(targetFormule.nom)} sur WhatsApp
+              </a>
+            )}
+            <p className="text-[11px] text-stone-500 text-center">
+              WhatsApp officiel EFA Technologies : +228 96 10 09 72
+            </p>
+          </div>
         </div>
       )}
 
@@ -1148,11 +1222,14 @@ export const MenuStockView: React.FC<MenuStockViewProps> = ({
                 <label className="block text-xs font-semibold text-stone-700 mb-1">Code PIN (4 chiffres)</label>
                 <input
                   type="text"
-                  maxLength={6}
+                  inputMode="numeric"
+                  pattern="\d{4}"
+                  maxLength={4}
                   required
                   value={ePin}
-                  onChange={(e) => setEPin(e.target.value)}
-                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm font-mono"
+                  onChange={(e) => setEPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="1234"
+                  className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm font-mono tracking-widest"
                 />
               </div>
             </div>

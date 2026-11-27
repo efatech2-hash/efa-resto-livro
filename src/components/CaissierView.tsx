@@ -12,6 +12,7 @@ import {
 import {
   formatDateTime,
   formatFCFA,
+  TOGO_PAYMENT_MODES,
   type Commande,
   type Etablissement,
   type ModePaiement,
@@ -566,7 +567,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
                     <span>Ajouter à la facture Chambre</span>
                   </button>
                 )}
-                {(['Especes', 'Flooz', 'Moov Money', 'Orange Money', 'Wave'] as const).map((m) => (
+                {TOGO_PAYMENT_MODES.map((m) => (
                   <button
                     key={m}
                     type="button"
@@ -722,7 +723,7 @@ export const CaissierView: React.FC<CaissierViewProps> = ({
               {formatFCFA(settleTarget.montant)}
             </p>
             <div className="grid grid-cols-2 gap-2">
-              {(['Especes', 'Flooz', 'Moov Money', 'Orange Money', 'Wave'] as const).map((m) => (
+              {TOGO_PAYMENT_MODES.map((m) => (
                 <button
                   key={m}
                   type="button"

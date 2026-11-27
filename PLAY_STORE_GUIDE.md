@@ -17,7 +17,7 @@
 
 FONCTIONNALITÉS PRINCIPALES :
 • Prise de commande rapide (Serveur) : interface tactile avec photos, tables, terrasse, à emporter et chambres.
-• Caisse & Paiements : validation instantanée, génération de bons et tickets de caisse, encaissement Espèces, Flooz, Moov Money, Orange Money, Wave et Crédit Client fin de mois.
+• Caisse & Paiements : validation instantanée, génération de bons et tickets de caisse, encaissement Espèces, Mixx by Yas, Moov Money, Orange Money, Wave et Crédit Client fin de mois.
 • Cuisine & Bar en direct : suivi de préparation étape par étape (En préparation → Prêt → Servi).
 • Stock & Recettes automatiques : chaque commande validée déduit automatiquement les ingrédients selon la recette configurée, avec alertes de stock bas et gestion des approvisionnements.
 • Livraison complète : calcul automatique des frais par quartier, attribution livreur et suivi EN COURS / LIVRÉ.

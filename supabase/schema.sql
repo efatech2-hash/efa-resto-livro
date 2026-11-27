@@ -24,9 +24,9 @@ CREATE TABLE IF NOT EXISTS public.formules (
 
 INSERT INTO public.formules (id, nom, description, prix_mensuel, prix_annuel, max_employes, max_appareils, max_tables, max_produits, max_chambres)
 VALUES
-  ('bar', 'Formule BAR', 'Boissons seulement · Serveur, Caissier, Stock Boissons, Paiement', 7500, 75000, 3, 3, 10, 30, 0),
-  ('resto', 'Formule RESTO', 'Bar + Menu Plats + Cuisine + Crédit Client + Stats + Livraison', 20000, 200000, 9, 8, 25, 80, 0),
-  ('premium', 'Formule PREMIUM', 'Tout RESTO + Module Hôtel Complet (Chambres, Check-in/out, Ménage)', 35000, 350000, 20, 15, NULL, NULL, 50)
+  ('bar', 'Formules BAR', 'Boissons seulement · Serveur, Caissier, Stock Boissons, Paiement', 7500, 75000, 3, 3, 10, 30, 0),
+  ('resto', 'Formules RESTO', 'Bar + Menu Plats + Cuisine + Crédit Client + Stats + Livraison', 20000, 200000, 9, 8, 25, 80, 0),
+  ('premium', 'Formules PREMIUM', 'Tout RESTO + Module Hôtel Complet (Chambres, Check-in/out, Ménage)', 35000, 350000, 20, 15, NULL, NULL, 50)
 ON CONFLICT (id) DO NOTHING;
 
 -- ----------------------------------------------------------------------------
@@ -235,7 +235,7 @@ CREATE TABLE IF NOT EXISTS public.paiements (
   commande_id uuid REFERENCES public.commandes(id) ON DELETE SET NULL,
   sejour_id uuid REFERENCES public.sejours(id) ON DELETE SET NULL,
   type_paiement text NOT NULL DEFAULT 'commande' CHECK (type_paiement IN ('commande', 'sejour_checkout', 'reglement_credit', 'acompte_reservation')),
-  mode_paiement text NOT NULL CHECK (mode_paiement IN ('Especes', 'Flooz', 'Moov Money', 'Orange Money', 'Wave', 'Credit')),
+  mode_paiement text NOT NULL CHECK (mode_paiement IN ('Especes', 'Mixx by Yas', 'Moov Money', 'Orange Money', 'Wave', 'Credit')),
   montant integer NOT NULL CHECK (montant >= 0),
   client_nom text,
   client_tel text,
@@ -290,7 +290,7 @@ CREATE TABLE IF NOT EXISTS public.abonnements (
   formule text NOT NULL REFERENCES public.formules(id),
   cycle text NOT NULL CHECK (cycle IN ('mensuel', 'annuel')),
   montant integer NOT NULL DEFAULT 0,
-  mode_paiement text NOT NULL CHECK (mode_paiement IN ('Flooz', 'Moov Money', 'Orange Money', 'Wave', 'Especes', 'Essai Gratuit')),
+  mode_paiement text NOT NULL CHECK (mode_paiement IN ('Mixx by Yas', 'Moov Money', 'Orange Money', 'Wave', 'Especes', 'Essai Gratuit')),
   reference_transaction text,
   statut text NOT NULL DEFAULT 'PAYE' CHECK (statut IN ('EN_ATTENTE', 'PAYE', 'REFUSE')),
   periode_debut timestamptz NOT NULL DEFAULT now(),
@@ -461,13 +461,60 @@ END;
 $$;
 
 -- ----------------------------------------------------------------------------
--- RPC : REJOINDRE UN ÉTABLISSEMENT PAR CODE (Employé sur son propre téléphone)
+-- RPC : LISTE DES EMPLOYÉS ACTIFS PAR CODE ÉTABLISSEMENT (Connexion sans email)
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.join_establishment_by_code(
+CREATE OR REPLACE FUNCTION public.get_active_employees_for_login(p_code_etab text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_etab public.etablissements%ROWTYPE;
+  v_emps jsonb;
+BEGIN
+  SELECT * INTO v_etab
+  FROM public.etablissements
+  WHERE upper(code_etablissement) = upper(trim(p_code_etab))
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Code établissement introuvable';
+  END IF;
+
+  SELECT COALESCE(
+    jsonb_agg(
+      jsonb_build_object('id', e.id, 'nom', e.nom, 'role', e.role)
+      ORDER BY e.nom ASC
+    ),
+    '[]'::jsonb
+  )
+  INTO v_emps
+  FROM public.employes e
+  WHERE e.etablissement_id = v_etab.id
+    AND e.actif = true
+    AND e.role <> 'patron';
+
+  RETURN jsonb_build_object(
+    'etablissement', jsonb_build_object(
+      'id', v_etab.id,
+      'nom', v_etab.nom,
+      'code_etablissement', v_etab.code_etablissement,
+      'formule', v_etab.formule,
+      'ville', v_etab.ville
+    ),
+    'employes', v_emps
+  );
+END;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- RPC : CONNEXION EMPLOYÉ PAR NOM + CODE PIN 4 CHIFFRES (Sans email ni confirmation)
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.verify_employee_pin_login(
   p_code_etab text,
-  p_nom text,
-  p_role text,
-  p_telephone text DEFAULT ''
+  p_employe_id uuid,
+  p_pin text
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -475,36 +522,401 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_uid uuid := auth.uid();
-  v_email text;
   v_etab public.etablissements%ROWTYPE;
+  v_emp public.employes%ROWTYPE;
 BEGIN
-  IF v_uid IS NULL THEN
-    RAISE EXCEPTION 'Authentification requise';
-  END IF;
+  SELECT * INTO v_etab
+  FROM public.etablissements
+  WHERE upper(code_etablissement) = upper(trim(p_code_etab))
+  LIMIT 1;
 
-  IF p_role NOT IN ('caissier', 'serveur', 'cuisinier', 'livreur', 'receptionniste', 'menage') THEN
-    RAISE EXCEPTION 'Rôle employé invalide';
-  END IF;
-
-  SELECT * INTO v_etab FROM public.etablissements WHERE upper(code_etablissement) = upper(trim(p_code_etab)) LIMIT 1;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Code établissement introuvable';
   END IF;
 
-  SELECT email INTO v_email FROM auth.users WHERE id = v_uid;
+  SELECT * INTO v_emp
+  FROM public.employes
+  WHERE id = p_employe_id
+    AND etablissement_id = v_etab.id
+  LIMIT 1;
 
-  INSERT INTO public.profils (id, etablissement_id, nom, email, telephone, role)
-  VALUES (v_uid, v_etab.id, trim(p_nom), v_email, p_telephone, p_role)
-  ON CONFLICT (id) DO UPDATE
-    SET etablissement_id = v_etab.id, nom = EXCLUDED.nom, telephone = EXCLUDED.telephone, role = p_role;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Compte employé supprimé ou introuvable';
+  END IF;
 
-  INSERT INTO public.employes (etablissement_id, profil_id, nom, telephone, email, role, pin_code)
-  VALUES (v_etab.id, v_uid, trim(p_nom), p_telephone, v_email, p_role, '1234');
+  IF v_emp.actif = false THEN
+    RAISE EXCEPTION 'Accès bloqué par le Patron. Contactez votre responsable.';
+  END IF;
 
-  RETURN jsonb_build_object('ok', true, 'etablissement_id', v_etab.id, 'nom_etablissement', v_etab.nom);
+  IF trim(v_emp.pin_code) <> trim(p_pin) THEN
+    RAISE EXCEPTION 'Code PIN incorrect';
+  END IF;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'etablissement', to_jsonb(v_etab),
+    'employe', jsonb_build_object(
+      'id', v_emp.id,
+      'etablissement_id', v_emp.etablissement_id,
+      'nom', v_emp.nom,
+      'role', v_emp.role,
+      'actif', v_emp.actif
+    )
+  );
 END;
 $$;
+
+-- ----------------------------------------------------------------------------
+-- RPC : LECTURE WORKSPACE POUR EMPLOYÉ CONNECTÉ PAR PIN
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.employee_get_workspace(
+  p_etab_id uuid,
+  p_employe_id uuid,
+  p_pin text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_emp public.employes%ROWTYPE;
+  v_etab public.etablissements%ROWTYPE;
+BEGIN
+  SELECT * INTO v_emp
+  FROM public.employes
+  WHERE id = p_employe_id
+    AND etablissement_id = p_etab_id
+  LIMIT 1;
+
+  IF NOT FOUND OR v_emp.actif = false OR trim(v_emp.pin_code) <> trim(p_pin) THEN
+    RAISE EXCEPTION 'Accès employé refusé ou bloqué';
+  END IF;
+
+  SELECT * INTO v_etab FROM public.etablissements WHERE id = p_etab_id;
+
+  RETURN jsonb_build_object(
+    'etab', to_jsonb(v_etab),
+    'employes', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', e.id, 'etablissement_id', e.etablissement_id, 'profil_id', e.profil_id, 'nom', e.nom, 'telephone', e.telephone, 'email', e.email, 'role', e.role, 'pin_code', '****', 'actif', e.actif, 'created_at', e.created_at) ORDER BY e.created_at) FROM public.employes e WHERE e.etablissement_id = p_etab_id AND e.actif = true), '[]'::jsonb),
+    'menus', COALESCE((SELECT jsonb_agg(to_jsonb(m) ORDER BY m.created_at) FROM public.menus m WHERE m.etablissement_id = p_etab_id), '[]'::jsonb),
+    'stock', COALESCE((SELECT jsonb_agg(to_jsonb(s) ORDER BY s.nom) FROM public.stock s WHERE s.etablissement_id = p_etab_id), '[]'::jsonb),
+    'approvisionnements', COALESCE((SELECT jsonb_agg(to_jsonb(a) ORDER BY a.created_at DESC) FROM (SELECT * FROM public.approvisionnements WHERE etablissement_id = p_etab_id ORDER BY created_at DESC LIMIT 50) a), '[]'::jsonb),
+    'commandes', COALESCE((SELECT jsonb_agg(to_jsonb(c) ORDER BY c.created_at DESC) FROM (SELECT * FROM public.commandes WHERE etablissement_id = p_etab_id ORDER BY created_at DESC LIMIT 200) c), '[]'::jsonb),
+    'paiements', COALESCE((SELECT jsonb_agg(to_jsonb(p) ORDER BY p.created_at DESC) FROM (SELECT * FROM public.paiements WHERE etablissement_id = p_etab_id ORDER BY created_at DESC LIMIT 300) p), '[]'::jsonb),
+    'livraisons', COALESCE((SELECT jsonb_agg(to_jsonb(l) ORDER BY l.created_at DESC) FROM (SELECT * FROM public.livraisons WHERE etablissement_id = p_etab_id ORDER BY created_at DESC LIMIT 100) l), '[]'::jsonb),
+    'chambres', COALESCE((SELECT jsonb_agg(to_jsonb(ch) ORDER BY ch.numero) FROM public.chambres ch WHERE ch.etablissement_id = p_etab_id), '[]'::jsonb),
+    'reservations', COALESCE((SELECT jsonb_agg(to_jsonb(r) ORDER BY r.date_arrivee DESC) FROM public.reservations r WHERE r.etablissement_id = p_etab_id), '[]'::jsonb),
+    'sejours', COALESCE((SELECT jsonb_agg(to_jsonb(sj) ORDER BY sj.heure_arrivee DESC) FROM (SELECT * FROM public.sejours WHERE etablissement_id = p_etab_id ORDER BY heure_arrivee DESC LIMIT 100) sj), '[]'::jsonb),
+    'menage', COALESCE((SELECT jsonb_agg(to_jsonb(mn) ORDER BY mn.created_at DESC) FROM (SELECT * FROM public.menage WHERE etablissement_id = p_etab_id ORDER BY created_at DESC LIMIT 50) mn), '[]'::jsonb)
+  );
+END;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- RPC : MUTATIONS POS POUR EMPLOYÉ CONNECTÉ PAR PIN
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.employee_mutate_workspace(
+  p_etab_id uuid,
+  p_employe_id uuid,
+  p_pin text,
+  p_action text,
+  p_payload jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_emp public.employes%ROWTYPE;
+  v_cmd public.commandes%ROWTYPE;
+BEGIN
+  SELECT * INTO v_emp
+  FROM public.employes
+  WHERE id = p_employe_id
+    AND etablissement_id = p_etab_id
+  LIMIT 1;
+
+  IF NOT FOUND OR v_emp.actif = false OR trim(v_emp.pin_code) <> trim(p_pin) THEN
+    RAISE EXCEPTION 'Accès employé refusé ou bloqué';
+  END IF;
+
+  IF NOT public.is_etablissement_actif(p_etab_id) THEN
+    RAISE EXCEPTION 'Établissement en lecture seule (abonnement expiré ou bloqué)';
+  END IF;
+
+  IF p_action = 'create_commande' THEN
+    INSERT INTO public.commandes (
+      etablissement_id, numero_bon, type_service, cible, chambre_id, sejour_id,
+      serveur_id, serveur_nom, items, montant_items, frais_livraison, montant_total,
+      statut_caisse, statut_cuisine, client_nom, client_tel, note, validated_at
+    ) VALUES (
+      p_etab_id,
+      p_payload->>'numero_bon',
+      p_payload->>'type_service',
+      p_payload->>'cible',
+      NULLIF(p_payload->>'chambre_id', '')::uuid,
+      NULLIF(p_payload->>'sejour_id', '')::uuid,
+      v_emp.id,
+      COALESCE(NULLIF(p_payload->>'serveur_nom', ''), v_emp.nom),
+      COALESCE(p_payload->'items', '[]'::jsonb),
+      COALESCE((p_payload->>'montant_items')::integer, 0),
+      COALESCE((p_payload->>'frais_livraison')::integer, 0),
+      COALESCE((p_payload->>'montant_total')::integer, 0),
+      COALESCE(p_payload->>'statut_caisse', 'EN_ATTENTE'),
+      COALESCE(p_payload->>'statut_cuisine', 'EN_ATTENTE'),
+      NULLIF(p_payload->>'client_nom', ''),
+      NULLIF(p_payload->>'client_tel', ''),
+      NULLIF(p_payload->>'note', ''),
+      NULLIF(p_payload->>'validated_at', '')::timestamptz
+    )
+    RETURNING * INTO v_cmd;
+    RETURN jsonb_build_object('ok', true, 'data', to_jsonb(v_cmd));
+
+  ELSIF p_action = 'validate_commande' THEN
+    UPDATE public.commandes
+    SET statut_caisse = 'VALIDEE',
+        caissier_nom = COALESCE(p_payload->>'caissier_nom', v_emp.nom),
+        validated_at = now()
+    WHERE id = (p_payload->>'id')::uuid AND etablissement_id = p_etab_id;
+    RETURN jsonb_build_object('ok', true);
+
+  ELSIF p_action = 'encaisser_commande' THEN
+    UPDATE public.commandes
+    SET statut_caisse = p_payload->>'statut_caisse',
+        caissier_nom = COALESCE(p_payload->>'caissier_nom', v_emp.nom),
+        paid_at = CASE WHEN p_payload->>'statut_caisse' = 'SUR_CHAMBRE' THEN NULL ELSE now() END
+    WHERE id = (p_payload->>'commande_id')::uuid AND etablissement_id = p_etab_id;
+
+    IF p_payload->>'statut_caisse' <> 'SUR_CHAMBRE' THEN
+      INSERT INTO public.paiements (
+        etablissement_id, commande_id, sejour_id, type_paiement, mode_paiement,
+        montant, client_nom, client_tel, est_regle, caissier_nom, reference
+      ) VALUES (
+        p_etab_id,
+        (p_payload->>'commande_id')::uuid,
+        NULLIF(p_payload->>'sejour_id', '')::uuid,
+        'commande',
+        p_payload->>'mode_paiement',
+        (p_payload->>'montant')::integer,
+        NULLIF(p_payload->>'client_nom', ''),
+        NULLIF(p_payload->>'client_tel', ''),
+        COALESCE((p_payload->>'est_regle')::boolean, true),
+        COALESCE(p_payload->>'caissier_nom', v_emp.nom),
+        NULLIF(p_payload->>'reference', '')
+      );
+    END IF;
+    RETURN jsonb_build_object('ok', true);
+
+  ELSIF p_action = 'settle_credit' THEN
+    UPDATE public.paiements
+    SET est_regle = true
+    WHERE id = (p_payload->>'paiement_id')::uuid AND etablissement_id = p_etab_id;
+
+    INSERT INTO public.paiements (
+      etablissement_id, commande_id, type_paiement, mode_paiement, montant,
+      client_nom, client_tel, est_regle, caissier_nom, reference
+    ) VALUES (
+      p_etab_id,
+      NULLIF(p_payload->>'commande_id', '')::uuid,
+      'reglement_credit',
+      p_payload->>'mode_paiement',
+      (p_payload->>'montant')::integer,
+      NULLIF(p_payload->>'client_nom', ''),
+      NULLIF(p_payload->>'client_tel', ''),
+      true,
+      COALESCE(p_payload->>'caissier_nom', v_emp.nom),
+      p_payload->>'reference'
+    );
+    RETURN jsonb_build_object('ok', true);
+
+  ELSIF p_action = 'update_kitchen_status' THEN
+    UPDATE public.commandes
+    SET statut_cuisine = p_payload->>'statut_cuisine'
+    WHERE id = (p_payload->>'id')::uuid AND etablissement_id = p_etab_id;
+    RETURN jsonb_build_object('ok', true);
+
+  ELSIF p_action = 'create_delivery' THEN
+    INSERT INTO public.commandes (
+      etablissement_id, numero_bon, type_service, cible, serveur_nom, items,
+      montant_items, frais_livraison, montant_total, statut_caisse, statut_cuisine,
+      client_nom, client_tel, validated_at
+    ) VALUES (
+      p_etab_id,
+      p_payload->>'numero_bon',
+      'Livraison',
+      p_payload->>'cible',
+      COALESCE(p_payload->>'operateur_nom', v_emp.nom),
+      COALESCE(p_payload->'items', '[]'::jsonb),
+      (p_payload->>'montant_items')::integer,
+      (p_payload->>'frais_livraison')::integer,
+      (p_payload->>'montant_total')::integer,
+      'VALIDEE',
+      'EN_ATTENTE',
+      p_payload->>'client_nom',
+      p_payload->>'client_tel',
+      now()
+    )
+    RETURNING * INTO v_cmd;
+
+    INSERT INTO public.livraisons (
+      etablissement_id, commande_id, client_nom, client_tel, quartier,
+      adresse_detail, frais_livraison, montant_a_encaisser, livreur_id, livreur_nom, statut
+    ) VALUES (
+      p_etab_id,
+      v_cmd.id,
+      p_payload->>'client_nom',
+      p_payload->>'client_tel',
+      p_payload->>'quartier',
+      p_payload->>'adresse_detail',
+      (p_payload->>'frais_livraison')::integer,
+      (p_payload->>'montant_total')::integer,
+      NULLIF(p_payload->>'livreur_id', '')::uuid,
+      NULLIF(p_payload->>'livreur_nom', ''),
+      'EN_ATTENTE'
+    );
+    RETURN jsonb_build_object('ok', true);
+
+  ELSIF p_action = 'update_delivery_status' THEN
+    UPDATE public.livraisons
+    SET statut = p_payload->>'statut',
+        livreur_nom = COALESCE(p_payload->>'livreur_nom', v_emp.nom),
+        delivered_at = CASE WHEN p_payload->>'statut' = 'LIVRE' THEN now() ELSE delivered_at END
+    WHERE id = (p_payload->>'livraison_id')::uuid AND etablissement_id = p_etab_id;
+
+    IF p_payload->>'statut' = 'LIVRE' THEN
+      UPDATE public.commandes
+      SET statut_caisse = 'ENCAISSEE', paid_at = now()
+      WHERE id = (p_payload->>'commande_id')::uuid AND etablissement_id = p_etab_id;
+
+      INSERT INTO public.paiements (
+        etablissement_id, commande_id, type_paiement, mode_paiement, montant,
+        client_nom, client_tel, est_regle, caissier_nom
+      ) VALUES (
+        p_etab_id,
+        (p_payload->>'commande_id')::uuid,
+        'commande',
+        'Especes',
+        (p_payload->>'montant')::integer,
+        p_payload->>'client_nom',
+        p_payload->>'client_tel',
+        true,
+        'Livreur · ' || COALESCE(p_payload->>'livreur_nom', v_emp.nom)
+      );
+    END IF;
+    RETURN jsonb_build_object('ok', true);
+
+  ELSIF p_action = 'update_chambre_statut' THEN
+    UPDATE public.chambres SET statut = p_payload->>'statut'
+    WHERE id = (p_payload->>'chambre_id')::uuid AND etablissement_id = p_etab_id;
+    RETURN jsonb_build_object('ok', true);
+
+  ELSIF p_action = 'check_in' THEN
+    INSERT INTO public.sejours (
+      etablissement_id, chambre_id, chambre_numero, client_nom, client_tel, piece_identite,
+      nb_personnes, type_sejour, duree_prevue, prix_unitaire, montant_chambre,
+      acompte_verse, heure_arrivee, heure_depart_prevue, receptionniste_nom, statut
+    ) VALUES (
+      p_etab_id,
+      (p_payload->>'chambre_id')::uuid,
+      p_payload->>'chambre_numero',
+      p_payload->>'client_nom',
+      p_payload->>'client_tel',
+      p_payload->>'piece_identite',
+      (p_payload->>'nb_personnes')::integer,
+      p_payload->>'type_sejour',
+      (p_payload->>'duree_prevue')::integer,
+      (p_payload->>'prix_unitaire')::integer,
+      (p_payload->>'montant_chambre')::integer,
+      (p_payload->>'acompte_verse')::integer,
+      (p_payload->>'heure_arrivee')::timestamptz,
+      (p_payload->>'heure_depart_prevue')::timestamptz,
+      COALESCE(p_payload->>'receptionniste_nom', v_emp.nom),
+      'EN_COURS'
+    );
+    UPDATE public.chambres SET statut = 'OCCUPEE'
+    WHERE id = (p_payload->>'chambre_id')::uuid AND etablissement_id = p_etab_id;
+    RETURN jsonb_build_object('ok', true);
+
+  ELSIF p_action = 'check_out' THEN
+    UPDATE public.sejours
+    SET supplement_prolongation = (p_payload->>'supplement_prolongation')::integer,
+        heure_depart_reelle = now(),
+        statut = 'TERMINE'
+    WHERE id = (p_payload->>'sejour_id')::uuid AND etablissement_id = p_etab_id;
+
+    UPDATE public.commandes
+    SET statut_caisse = 'ENCAISSEE', paid_at = now()
+    WHERE sejour_id = (p_payload->>'sejour_id')::uuid
+      AND etablissement_id = p_etab_id
+      AND statut_caisse = 'SUR_CHAMBRE';
+
+    INSERT INTO public.paiements (
+      etablissement_id, sejour_id, type_paiement, mode_paiement, montant,
+      client_nom, client_tel, est_regle, caissier_nom, reference
+    ) VALUES (
+      p_etab_id,
+      (p_payload->>'sejour_id')::uuid,
+      'sejour_checkout',
+      p_payload->>'mode_paiement',
+      (p_payload->>'montant')::integer,
+      p_payload->>'client_nom',
+      p_payload->>'client_tel',
+      true,
+      COALESCE(p_payload->>'caissier_nom', v_emp.nom),
+      p_payload->>'reference'
+    );
+    RETURN jsonb_build_object('ok', true);
+
+  ELSIF p_action = 'create_reservation' THEN
+    INSERT INTO public.reservations (
+      etablissement_id, chambre_id, client_nom, client_tel, date_arrivee,
+      date_depart, type_sejour, acompte, notes, statut
+    ) VALUES (
+      p_etab_id,
+      (p_payload->>'chambre_id')::uuid,
+      p_payload->>'client_nom',
+      p_payload->>'client_tel',
+      (p_payload->>'date_arrivee')::timestamptz,
+      (p_payload->>'date_depart')::timestamptz,
+      p_payload->>'type_sejour',
+      (p_payload->>'acompte')::integer,
+      NULLIF(p_payload->>'notes', ''),
+      'CONFIRMEE'
+    );
+    UPDATE public.chambres SET statut = 'RESERVEE'
+    WHERE id = (p_payload->>'chambre_id')::uuid AND etablissement_id = p_etab_id;
+    RETURN jsonb_build_object('ok', true);
+
+  ELSIF p_action = 'update_reservation_statut' THEN
+    UPDATE public.reservations SET statut = p_payload->>'statut'
+    WHERE id = (p_payload->>'reservation_id')::uuid AND etablissement_id = p_etab_id;
+    IF p_payload->>'statut' = 'ANNULEE' THEN
+      UPDATE public.chambres SET statut = 'LIBRE'
+      WHERE id = (p_payload->>'chambre_id')::uuid AND etablissement_id = p_etab_id;
+    END IF;
+    RETURN jsonb_build_object('ok', true);
+
+  ELSIF p_action = 'clean_room' THEN
+    UPDATE public.menage
+    SET statut = 'NETTOYEE',
+        agent_nom = COALESCE(p_payload->>'agent_nom', v_emp.nom),
+        completed_at = now()
+    WHERE id = (p_payload->>'task_id')::uuid AND etablissement_id = p_etab_id;
+    UPDATE public.chambres SET statut = 'LIBRE'
+    WHERE id = (p_payload->>'chambre_id')::uuid AND etablissement_id = p_etab_id;
+    RETURN jsonb_build_object('ok', true);
+
+  ELSE
+    RAISE EXCEPTION 'Action non reconnue: %', p_action;
+  END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_active_employees_for_login(text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.verify_employee_pin_login(text, uuid, text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.employee_get_workspace(uuid, uuid, text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.employee_mutate_workspace(uuid, uuid, text, text, jsonb) TO anon, authenticated;
 
 -- ----------------------------------------------------------------------------
 -- TRIGGERS MÉTIER : LIMITES STRICTES PAR FORMULE + STOCK AUTO + HÔTEL AUTO
@@ -934,6 +1346,28 @@ DROP POLICY IF EXISTS "menage_write" ON public.menage;
 CREATE POLICY "menage_write" ON public.menage FOR ALL
   USING (public.is_super_admin() OR (etablissement_id = public.get_my_etablissement_id() AND public.is_etablissement_actif(etablissement_id)))
   WITH CHECK (public.is_super_admin() OR (etablissement_id = public.get_my_etablissement_id() AND public.is_etablissement_actif(etablissement_id)));
+
+-- ----------------------------------------------------------------------------
+-- MIGRATION IDEMPOTENTE PAIEMENTS TOGO (Mixx by Yas remplace Flooz)
+-- ----------------------------------------------------------------------------
+DO $$
+BEGIN
+  UPDATE public.paiements SET mode_paiement = 'Mixx by Yas' WHERE mode_paiement = 'Flooz';
+  UPDATE public.abonnements SET mode_paiement = 'Mixx by Yas' WHERE mode_paiement = 'Flooz';
+  UPDATE public.formules SET nom = 'Formules BAR' WHERE id = 'bar';
+  UPDATE public.formules SET nom = 'Formules RESTO' WHERE id = 'resto';
+  UPDATE public.formules SET nom = 'Formules PREMIUM' WHERE id = 'premium';
+
+  ALTER TABLE public.paiements DROP CONSTRAINT IF EXISTS paiements_mode_paiement_check;
+  ALTER TABLE public.paiements ADD CONSTRAINT paiements_mode_paiement_check
+    CHECK (mode_paiement IN ('Especes', 'Mixx by Yas', 'Moov Money', 'Orange Money', 'Wave', 'Credit'));
+
+  ALTER TABLE public.abonnements DROP CONSTRAINT IF EXISTS abonnements_mode_paiement_check;
+  ALTER TABLE public.abonnements ADD CONSTRAINT abonnements_mode_paiement_check
+    CHECK (mode_paiement IN ('Mixx by Yas', 'Moov Money', 'Orange Money', 'Wave', 'Especes', 'Essai Gratuit'));
+EXCEPTION
+  WHEN others THEN NULL;
+END $$;
 
 -- ----------------------------------------------------------------------------
 -- REALTIME PUBLICATION (Idempotent, zéro erreur doublon)

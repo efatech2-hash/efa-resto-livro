@@ -1,30 +1,64 @@
-import React, {useState} from 'react';
-import {ArrowRight, Building2, Check, KeyRound, ShieldCheck, UserPlus} from 'lucide-react';
+import React, {useEffect, useState} from 'react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Building2,
+  Check,
+  ExternalLink,
+  KeyRound,
+  MessageCircle,
+  Search,
+  UserCheck,
+  Users,
+} from 'lucide-react';
 import {supabase} from '../lib/supabase';
-import {DEFAULT_FORMULES, formatFCFA, type Formule, type FormuleId, type RoleType} from '../types/efa';
+import {
+  DEFAULT_FORMULES,
+  formatFCFA,
+  formatFormuleName,
+  getWhatsAppFormuleUrl,
+  ROLE_LABELS,
+  type Formule,
+  type FormuleId,
+  type RoleType,
+} from '../types/efa';
 import {PWAInstallBanner, PWAInstallButton, PWAInstallHeroButton} from './PWAComponents';
+
+export interface EmployeeLoginCandidate {
+  id: string;
+  nom: string;
+  role: Exclude<RoleType, 'super_admin' | 'patron'>;
+}
 
 interface AuthScreenProps {
   formules: Formule[];
   pendingUserEmail?: string | null;
   pendingUserId?: string | null;
   onAuthComplete: () => Promise<void>;
+  onEmployeePinLogin: (params: {
+    codeEtab: string;
+    employeId: string;
+    pin: string;
+  }) => Promise<{ok: boolean; error?: string}>;
   onSignOut?: () => Promise<void>;
-  onOpenSqlSetup: () => void;
 }
 
-type AuthTab = 'login' | 'patron' | 'employe' | 'super_admin';
+type AuthTab = 'login' | 'patron' | 'employe';
+
+const LAST_CODE_KEY = 'efa_last_etab_code';
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({
   formules,
   pendingUserEmail,
   pendingUserId,
   onAuthComplete,
+  onEmployeePinLogin,
   onSignOut,
-  onOpenSqlSetup,
 }) => {
   const activeFormules = formules.length > 0 ? formules : DEFAULT_FORMULES;
   const [tab, setTab] = useState<AuthTab>(pendingUserId ? 'patron' : 'login');
+
+  // Patron Email + Password state
   const [email, setEmail] = useState(pendingUserEmail || '');
   const [password, setPassword] = useState('');
   const [nom, setNom] = useState('');
@@ -32,13 +66,95 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [nomEtab, setNomEtab] = useState('');
   const [ville, setVille] = useState('Lomé');
   const [selectedFormule, setSelectedFormule] = useState<FormuleId>('resto');
-  const [codeEtab, setCodeEtab] = useState('');
-  const [empRole, setEmpRole] = useState<Exclude<RoleType, 'super_admin' | 'patron'>>('serveur');
+
+  // Employee Code + Name List + 4-digit PIN state (NO email)
+  const [codeEtab, setCodeEtab] = useState<string>(() => {
+    try {
+      return localStorage.getItem(LAST_CODE_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
+  const [etabPreviewNom, setEtabPreviewNom] = useState<string | null>(null);
+  const [empCandidates, setEmpCandidates] = useState<EmployeeLoginCandidate[]>([]);
+  const [selectedEmp, setSelectedEmp] = useState<EmployeeLoginCandidate | null>(null);
+  const [pinCode, setPinCode] = useState('');
+
   const [loading, setLoading] = useState(false);
+  const [loadingEmps, setLoadingEmps] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const fetchEmployeesForCode = async (rawCode: string) => {
+    const cleanCode = rawCode.trim().toUpperCase();
+    if (!cleanCode) {
+      setError('Veuillez saisir le code de votre établissement.');
+      return;
+    }
+    setLoadingEmps(true);
+    setError(null);
+    setInfo(null);
+    setSelectedEmp(null);
+    setPinCode('');
+
+    try {
+      const {data, error: rpcErr} = await supabase.rpc('get_active_employees_for_login', {
+        p_code_etab: cleanCode,
+      });
+      if (rpcErr) throw rpcErr;
+
+      const parsed = data as {
+        etablissement?: {id: string; nom: string; code_etablissement: string};
+        employes?: EmployeeLoginCandidate[];
+      };
+
+      const list = parsed?.employes || [];
+      setEtabPreviewNom(parsed?.etablissement?.nom || cleanCode);
+      setEmpCandidates(list);
+      try {
+        localStorage.setItem(LAST_CODE_KEY, cleanCode);
+        localStorage.setItem(
+          `efa_emp_candidates_${cleanCode}`,
+          JSON.stringify({etabNom: parsed?.etablissement?.nom || cleanCode, employes: list})
+        );
+      } catch {
+        // Ignore storage quota issues
+      }
+      if (list.length === 0) {
+        setInfo('Aucun employé actif trouvé. Demandez au Patron d’ajouter votre nom et votre code PIN.');
+      }
+    } catch (err: unknown) {
+      // Offline fallback from cached candidate list if network fails
+      if (!navigator.onLine) {
+        try {
+          const raw = localStorage.getItem(`efa_emp_candidates_${cleanCode}`);
+          if (raw) {
+            const cached = JSON.parse(raw) as {etabNom: string; employes: EmployeeLoginCandidate[]};
+            setEtabPreviewNom(cached.etabNom);
+            setEmpCandidates(cached.employes || []);
+            setLoadingEmps(false);
+            return;
+          }
+        } catch {
+          // Ignore cache error
+        }
+      }
+      setEtabPreviewNom(null);
+      setEmpCandidates([]);
+      setError(err instanceof Error ? err.message : 'Code établissement introuvable');
+    } finally {
+      setLoadingEmps(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === 'employe' && codeEtab.trim().length >= 5 && !etabPreviewNom && empCandidates.length === 0) {
+      void fetchEmployeesForCode(codeEtab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  const handlePatronLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -96,76 +212,30 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     }
   };
 
-  const handleEmployeeJoin = async (e: React.FormEvent) => {
+  const handleEmployeePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedEmp) return;
+    if (!/^\d{4}$/.test(pinCode.trim())) {
+      setError('Entrez votre code PIN à 4 chiffres.');
+      return;
+    }
     setLoading(true);
     setError(null);
-    setInfo(null);
-    try {
-      if (!pendingUserId) {
-        const {data, error: signUpErr} = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-        });
-        if (signUpErr) throw signUpErr;
-        if (!data.session) {
-          setInfo(
-            'Compte créé ! Vérifiez votre e-mail puis connectez-vous pour rejoindre votre établissement avec le code.'
-          );
-          setLoading(false);
-          return;
-        }
-      }
-
-      const {error: rpcErr} = await supabase.rpc('join_establishment_by_code', {
-        p_code_etab: codeEtab.trim().toUpperCase(),
-        p_nom: nom.trim(),
-        p_role: empRole,
-        p_telephone: telephone.trim(),
-      });
-      if (rpcErr) throw rpcErr;
-      await onAuthComplete();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Impossible de rejoindre l’établissement');
-    } finally {
-      setLoading(false);
+    const res = await onEmployeePinLogin({
+      codeEtab: codeEtab.trim().toUpperCase(),
+      employeId: selectedEmp.id,
+      pin: pinCode.trim(),
+    });
+    setLoading(false);
+    if (!res.ok) {
+      setError(res.error || 'Connexion refusée');
+      setPinCode('');
     }
   };
 
-  const handleBootstrapSuperAdmin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const appendPinDigit = (d: string) => {
     setError(null);
-    setInfo(null);
-    try {
-      if (!pendingUserId) {
-        const {data, error: signUpErr} = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-        });
-        if (signUpErr) {
-          const {error: signInErr} = await supabase.auth.signInWithPassword({
-            email: email.trim(),
-            password,
-          });
-          if (signInErr) throw signInErr;
-        } else if (!data.session) {
-          setInfo('Compte créé ! Confirmez votre e-mail puis connectez-vous pour activer le Super-Admin.');
-          setLoading(false);
-          return;
-        }
-      }
-
-      const {error: rpcErr} = await supabase.rpc('bootstrap_super_admin', {
-        p_nom: nom.trim() || 'Super-Admin EFA',
-      });
-      if (rpcErr) throw rpcErr;
-      await onAuthComplete();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Échec activation Super-Admin');
-    } finally {
-      setLoading(false);
-    }
+    setPinCode((prev) => (prev.length < 4 ? prev + d : prev));
   };
 
   return (
@@ -176,9 +246,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3 flex items-center justify-between gap-4 sm:gap-8">
           <div className="flex items-center gap-2.5 min-w-0 shrink-0">
             <img
-              src="/logo-emblem.png"
+              src="/pwa-192x192.png"
               alt="Logo EFA RESTO-LIVRO"
-              className="w-9 h-9 rounded-full object-contain shrink-0"
+              className="w-9 h-9 rounded-full object-contain shrink-0 border border-stone-100"
             />
             <span className="font-display text-base sm:text-lg font-extrabold tracking-tight text-[#161614] whitespace-nowrap">
               EFA RESTO-LIVRO
@@ -200,14 +270,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               onClick={() => setTab('employe')}
               className="hover:text-[#161614] transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
             >
-              Accès Équipe
-            </button>
-            <button
-              type="button"
-              onClick={onOpenSqlSetup}
-              className="hover:text-[#161614] transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
-            >
-              Script SQL
+              Connexion Employé (PIN)
             </button>
           </nav>
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -251,57 +314,48 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             </div>
           )}
 
-          {/* Segmented control tabs */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 rounded-xl bg-stone-100 p-1">
+          {/* 2 Types Login Tabs: Patron (Connexion / Créer Etab.) + Employés (PIN sans e-mail) */}
+          <div className="grid grid-cols-3 gap-1.5 rounded-xl bg-stone-100 p-1">
             {!pendingUserId && (
               <button
                 type="button"
                 onClick={() => {
                   setTab('login');
                   setError(null);
+                  setInfo(null);
                 }}
-                className={`rounded-lg px-2.5 py-2.5 text-xs font-semibold transition-colors min-h-[44px] ${
+                className={`rounded-lg px-2 py-2.5 text-xs font-semibold transition-colors min-h-[44px] ${
                   tab === 'login' ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600 hover:text-[#161614]'
                 }`}
               >
-                Connexion
+                Patron
               </button>
             )}
             <button
               type="button"
               onClick={() => {
+                setTab('employe');
+                setError(null);
+                setInfo(null);
+              }}
+              className={`rounded-lg px-2 py-2.5 text-xs font-semibold transition-colors min-h-[44px] ${
+                tab === 'employe' ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600 hover:text-[#161614]'
+              }`}
+            >
+              Employés
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 setTab('patron');
                 setError(null);
+                setInfo(null);
               }}
-              className={`rounded-lg px-2.5 py-2.5 text-xs font-semibold transition-colors min-h-[44px] ${
+              className={`rounded-lg px-2 py-2.5 text-xs font-semibold transition-colors min-h-[44px] ${
                 tab === 'patron' ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600 hover:text-[#161614]'
               }`}
             >
               Créer Etab.
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setTab('employe');
-                setError(null);
-              }}
-              className={`rounded-lg px-2.5 py-2.5 text-xs font-semibold transition-colors min-h-[44px] ${
-                tab === 'employe' ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600 hover:text-[#161614]'
-              }`}
-            >
-              Équipe
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setTab('super_admin');
-                setError(null);
-              }}
-              className={`rounded-lg px-2.5 py-2.5 text-xs font-semibold transition-colors min-h-[44px] ${
-                tab === 'super_admin' ? 'bg-white text-[#161614] shadow-sm' : 'text-stone-600 hover:text-[#161614]'
-              }`}
-            >
-              Super-Admin
             </button>
           </div>
 
@@ -316,12 +370,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             </div>
           )}
 
+          {/* TYPE 1: PATRON (Email + Mot de passe seulement) */}
           {tab === 'login' && !pendingUserId && (
-            <form onSubmit={handleLogin} className="mt-5 space-y-4">
+            <form onSubmit={handlePatronLogin} className="mt-5 space-y-4">
               <div>
-                <h2 className="font-display text-xl font-bold text-[#161614]">Connexion à votre espace</h2>
+                <h2 className="font-display text-xl font-bold text-[#161614]">Connexion Patron</h2>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Patron, Caissier, Serveur, Cuisinier, Livreur, Réceptionniste ou Super-Admin.
+                  Réservé au propriétaire de l’établissement (e-mail et mot de passe).
                 </p>
               </div>
               <div>
@@ -352,11 +407,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] px-5 py-3.5 text-sm font-bold text-white hover:bg-[#0B7145] disabled:opacity-60 min-h-[52px]"
               >
                 <KeyRound className="w-4 h-4" />
-                {loading ? 'Connexion...' : 'Se connecter'}
+                {loading ? 'Connexion...' : 'Se connecter (Patron)'}
               </button>
             </form>
           )}
 
+          {/* CRÉER ÉTABLISSEMENT (Patron) */}
           {tab === 'patron' && (
             <form onSubmit={handlePatronRegister} className="mt-5 space-y-3.5">
               <div>
@@ -438,7 +494,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">Formule choisie</label>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">Formules choisies</label>
                   <select
                     value={selectedFormule}
                     onChange={(e) => setSelectedFormule(e.target.value as FormuleId)}
@@ -446,7 +502,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   >
                     {activeFormules.map((f) => (
                       <option key={f.id} value={f.id}>
-                        {f.nom} ({formatFCFA(f.prix_mensuel)}/mois)
+                        {formatFormuleName(f.nom)} ({formatFCFA(f.prix_mensuel)}/mois)
                       </option>
                     ))}
                   </select>
@@ -464,146 +520,158 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             </form>
           )}
 
+          {/* TYPE 2: EMPLOYÉS (PAS d'e-mail -> Code Établissement -> Liste des noms -> Clic nom -> Code PIN 4 chiffres -> Entrée) */}
           {tab === 'employe' && (
-            <form onSubmit={handleEmployeeJoin} className="mt-5 space-y-3.5">
+            <div className="mt-5 space-y-4">
               <div>
-                <h2 className="font-display text-xl font-bold text-[#161614]">Rejoindre un établissement</h2>
+                <h2 className="font-display text-xl font-bold text-[#161614]">Connexion Employé</h2>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Entrez le code EFA fourni par votre Patron pour connecter votre appareil.
+                  Sans e-mail : cliquez sur votre nom puis entrez votre code PIN à 4 chiffres.
                 </p>
               </div>
-              {!pendingUserId && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-700 mb-1">E-mail</label>
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="employe@resto.com"
-                      className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm focus:border-emerald-700 focus:outline-none min-h-[48px]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-700 mb-1">Mot de passe</label>
-                    <input
-                      type="password"
-                      required
-                      minLength={6}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="6+ caractères"
-                      className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm focus:border-emerald-700 focus:outline-none min-h-[48px]"
-                    />
-                  </div>
-                </div>
-              )}
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">Code Établissement</label>
+
+              {/* Étape 1 : Code établissement */}
+              <div className="flex gap-2">
                 <input
                   type="text"
-                  required
                   value={codeEtab}
                   onChange={(e) => setCodeEtab(e.target.value.toUpperCase())}
-                  placeholder="EFA-XXXXXX"
-                  className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm font-mono uppercase focus:border-emerald-700 focus:outline-none min-h-[48px]"
+                  placeholder="Code EFA-XXXXXX"
+                  className="flex-1 rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm font-mono uppercase focus:border-emerald-700 focus:outline-none min-h-[48px]"
                 />
+                <button
+                  type="button"
+                  disabled={loadingEmps}
+                  onClick={() => fetchEmployeesForCode(codeEtab)}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#161614] px-4 py-2.5 text-xs font-bold text-white hover:bg-stone-800 disabled:opacity-60 min-h-[48px] shrink-0"
+                >
+                  <Search className="w-4 h-4" />
+                  {loadingEmps ? '...' : 'Afficher'}
+                </button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">Votre nom</label>
-                  <input
-                    type="text"
-                    required
-                    value={nom}
-                    onChange={(e) => setNom(e.target.value)}
-                    placeholder="Afi Kouassi"
-                    className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm focus:border-emerald-700 focus:outline-none min-h-[48px]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">Poste / Rôle</label>
-                  <select
-                    value={empRole}
-                    onChange={(e) => setEmpRole(e.target.value as Exclude<RoleType, 'super_admin' | 'patron'>)}
-                    className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm focus:border-emerald-700 focus:outline-none min-h-[48px]"
-                  >
-                    <option value="serveur">Serveur / Serveuse</option>
-                    <option value="caissier">Caissier</option>
-                    <option value="cuisinier">Cuisinier / Barman</option>
-                    <option value="livreur">Livreur</option>
-                    <option value="receptionniste">Réceptionniste Hôtel</option>
-                    <option value="menage">Femme de ménage</option>
-                  </select>
-                </div>
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#161614] px-5 py-3.5 text-sm font-bold text-white hover:bg-stone-800 disabled:opacity-60 min-h-[52px]"
-              >
-                <UserPlus className="w-4 h-4" />
-                {loading ? 'Rattachement...' : 'Rejoindre l’équipe'}
-              </button>
-            </form>
-          )}
 
-          {tab === 'super_admin' && (
-            <form onSubmit={handleBootstrapSuperAdmin} className="mt-5 space-y-3.5">
-              <div>
-                <h2 className="font-display text-xl font-bold text-[#161614]">Activer le compte Super-Admin</h2>
-                <p className="text-xs text-stone-500 mt-0.5">
-                  Réservé au propriétaire du SaaS lors du premier démarrage.
-                </p>
-              </div>
-              {!pendingUserId && (
-                <>
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-700 mb-1">E-mail Super-Admin</label>
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="admin@efa-resto.com"
-                      className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm focus:border-emerald-700 focus:outline-none min-h-[48px]"
-                    />
+              {/* Étape 2 : Liste des noms d'employés actifs (clic sur son nom) */}
+              {etabPreviewNom && !selectedEmp && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-emerald-800">{etabPreviewNom}</span>
+                    <span className="text-stone-500">{empCandidates.length} employé(s) actif(s)</span>
                   </div>
+                  {empCandidates.length === 0 ? (
+                    <div className="rounded-xl border border-stone-200 bg-[#FAF9F6] p-4 text-center text-xs text-stone-500">
+                      <Users className="w-6 h-6 text-stone-400 mx-auto mb-1.5" />
+                      Aucun employé actif pour ce code. Le Patron doit vous ajouter dans Équipe & Config.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-0.5">
+                      {empCandidates.map((emp) => (
+                        <button
+                          key={emp.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedEmp(emp);
+                            setPinCode('');
+                            setError(null);
+                          }}
+                          className="flex items-center justify-between gap-2 rounded-xl border border-stone-200 bg-[#FAF9F6] hover:border-emerald-600 hover:bg-emerald-50/60 px-3.5 py-3 text-left transition-colors min-h-[54px]"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-bold text-sm text-[#161614] truncate">{emp.nom}</p>
+                            <p className="text-[11px] text-stone-500 truncate">{ROLE_LABELS[emp.role]}</p>
+                          </div>
+                          <ArrowRight className="w-4 h-4 text-emerald-700 shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Étape 3 : Code PIN 4 chiffres -> Entrée */}
+              {selectedEmp && (
+                <form onSubmit={handleEmployeePinSubmit} className="space-y-4 rounded-xl border border-emerald-200 bg-[#FAF9F6] p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold text-emerald-800">{etabPreviewNom}</p>
+                      <h3 className="font-display text-lg font-bold text-[#161614]">{selectedEmp.nom}</h3>
+                      <p className="text-xs text-stone-500">{ROLE_LABELS[selectedEmp.role]}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedEmp(null);
+                        setPinCode('');
+                        setError(null);
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-2 text-xs font-semibold text-stone-700 min-h-[40px]"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      Noms
+                    </button>
+                  </div>
+
                   <div>
-                    <label className="block text-xs font-semibold text-stone-700 mb-1">Mot de passe</label>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                      Code PIN (4 chiffres)
+                    </label>
                     <input
                       type="password"
+                      inputMode="numeric"
+                      maxLength={4}
                       required
-                      minLength={6}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="6+ caractères"
-                      className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm focus:border-emerald-700 focus:outline-none min-h-[48px]"
+                      value={pinCode}
+                      onChange={(e) => setPinCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      placeholder="••••"
+                      className="w-full rounded-xl border border-stone-300 bg-white px-4 py-3 text-center font-mono text-2xl tracking-[0.6em] focus:border-emerald-700 focus:outline-none min-h-[52px]"
                     />
                   </div>
-                </>
+
+                  {/* Clavier numérique tactile pour smartphone / tablette */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                      <button
+                        key={digit}
+                        type="button"
+                        onClick={() => appendPinDigit(digit)}
+                        className="rounded-xl border border-stone-200 bg-white py-2.5 font-mono text-lg font-bold text-[#161614] hover:bg-stone-100 active:scale-95 min-h-[48px]"
+                      >
+                        {digit}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setPinCode('')}
+                      className="rounded-xl border border-stone-200 bg-stone-100 py-2.5 text-xs font-bold text-stone-700 min-h-[48px]"
+                    >
+                      Effacer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => appendPinDigit('0')}
+                      className="rounded-xl border border-stone-200 bg-white py-2.5 font-mono text-lg font-bold text-[#161614] hover:bg-stone-100 active:scale-95 min-h-[48px]"
+                    >
+                      0
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPinCode((p) => p.slice(0, -1))}
+                      className="rounded-xl border border-stone-200 bg-stone-100 py-2.5 text-xs font-bold text-stone-700 min-h-[48px]"
+                    >
+                      ←
+                    </button>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading || pinCode.length < 4}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] px-5 py-3.5 text-sm font-bold text-white hover:bg-[#0B7145] disabled:opacity-50 min-h-[52px]"
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    {loading ? 'Vérification...' : 'Entrée'}
+                  </button>
+                </form>
               )}
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">Nom affiché</label>
-                <input
-                  type="text"
-                  required
-                  value={nom}
-                  onChange={(e) => setNom(e.target.value)}
-                  placeholder="Propriétaire EFA SaaS"
-                  className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-sm focus:border-emerald-700 focus:outline-none min-h-[48px]"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#161614] px-5 py-3.5 text-sm font-bold text-white hover:bg-stone-800 disabled:opacity-60 min-h-[52px]"
-              >
-                <ShieldCheck className="w-4 h-4" />
-                {loading ? 'Activation...' : 'Activer l’espace Super-Admin'}
-              </button>
-            </form>
+            </div>
           )}
         </section>
 
@@ -617,7 +685,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               Pilotez votre caisse, cuisine, stock, livraisons et chambres depuis un seul outil.
             </h1>
             <p className="text-sm sm:text-base text-stone-600 max-w-2xl leading-relaxed">
-              Encaissement Espèces et Mobile Money (Flooz, Moov Money, Orange Money, Wave), déduction automatique des recettes en stock et mode hors-ligne sur téléphone, tablette et ordinateur.
+              Encaissement Espèces et Mobile Money (Mixx by Yas, Moov Money, Orange Money, Wave), déduction automatique des recettes en stock et mode hors-ligne sur téléphone, tablette et ordinateur.
             </p>
             <div className="pt-1 flex flex-wrap items-center gap-3">
               <PWAInstallHeroButton />
@@ -627,6 +695,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
             {activeFormules.map((f) => {
               const isSelected = selectedFormule === f.id && tab === 'patron';
+              const displayNom = formatFormuleName(f.nom);
               return (
                 <div
                   key={f.id}
@@ -642,7 +711,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       setTab('patron');
                     }
                   }}
-                  className={`cursor-pointer rounded-xl border p-5 transition-colors flex flex-col justify-between ${
+                  className={`cursor-pointer rounded-xl border p-5 transition-colors flex flex-col justify-between gap-4 ${
                     isSelected
                       ? 'border-emerald-700 bg-white ring-2 ring-emerald-700/20'
                       : 'border-stone-200 bg-white hover:border-stone-300'
@@ -650,7 +719,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-display text-base font-bold text-[#161614]">{f.nom}</h3>
+                      <h3 className="font-display text-base font-bold text-[#161614]">{displayNom}</h3>
                       {f.id === 'premium' && (
                         <span className="text-xs font-semibold text-amber-700">Complet</span>
                       )}
@@ -694,6 +763,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       )}
                     </ul>
                   </div>
+
+                  <a
+                    href={getWhatsAppFormuleUrl(f.nom)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#0B7145] transition-colors min-h-[46px]"
+                  >
+                    <MessageCircle className="w-4 h-4 shrink-0" />
+                    <span>Payer</span>
+                    <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                  </a>
                 </div>
               );
             })}

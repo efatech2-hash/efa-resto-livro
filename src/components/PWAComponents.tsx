@@ -63,7 +63,7 @@ const ManualInstallModal: React.FC<{isIOS: boolean; onClose: () => void}> = ({is
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <img
-            src="/logo-emblem.png"
+            src="/pwa-192x192.png"
             alt="EFA RESTO-LIVRO"
             className="w-9 h-9 rounded-full object-contain border border-stone-200"
           />
@@ -133,7 +133,7 @@ export const PWAInstallBanner: React.FC = () => {
       <div className="bg-[#0E8A55] text-white px-3 sm:px-6 py-2 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <img
-            src="/logo-emblem.png"
+            src="/pwa-192x192.png"
             alt="Logo EFA"
             className="w-7 h-7 rounded-full bg-white object-contain shrink-0"
           />

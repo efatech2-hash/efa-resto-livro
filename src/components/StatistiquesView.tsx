@@ -401,7 +401,7 @@ export const StatistiquesView: React.FC<StatistiquesViewProps> = ({
           <div className="flex items-center gap-2 border-b border-stone-100 pb-3">
             <BedDouble className="w-5 h-5 text-[#0E8A55]" />
             <h2 className="font-display text-lg font-bold text-[#161614]">
-              Statistiques Hôtel (Formule PREMIUM)
+              Statistiques Hôtel (Formules PREMIUM)
             </h2>
           </div>
 

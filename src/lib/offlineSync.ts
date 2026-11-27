@@ -14,6 +14,12 @@ export type NewOfflineOperation =
       match: Record<string, unknown>;
       payload: Record<string, unknown>;
       description: string;
+    }
+  | {
+      type: 'rpc';
+      fn: string;
+      params: Record<string, unknown>;
+      description: string;
     };
 
 export type OfflineOperation = NewOfflineOperation & {
@@ -119,6 +125,14 @@ export async function flushOfflineQueue(client: SupabaseClient): Promise<{
           query = query.eq(col, val);
         }
         const {error} = await query;
+        if (error) {
+          errors.push(`${op.description}: ${error.message}`);
+          remaining.push(op);
+        } else {
+          synced += 1;
+        }
+      } else if (op.type === 'rpc') {
+        const {error} = await client.rpc(op.fn, op.params);
         if (error) {
           errors.push(`${op.description}: ${error.message}`);
           remaining.push(op);

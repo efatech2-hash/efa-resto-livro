@@ -14,6 +14,7 @@ import {
   formatDateTime,
   formatFCFA,
   PHOTO_PRESETS,
+  TOGO_PAYMENT_MODES,
   type Chambre,
   type ChambreStatut,
   type Commande,
@@ -971,7 +972,7 @@ export const HotelView: React.FC<HotelViewProps> = ({
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    {(['Especes', 'Flooz', 'Moov Money', 'Orange Money', 'Wave'] as const).map((m) => (
+                    {TOGO_PAYMENT_MODES.map((m) => (
                       <button
                         key={m}
                         type="button"

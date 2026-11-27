@@ -12,7 +12,14 @@ export type RoleType =
 
 export type CycleAbonnement = 'mensuel' | 'annuel';
 export type StatutAbonnement = 'essai' | 'actif' | 'expire' | 'bloque';
-export type ModePaiement = 'Especes' | 'Flooz' | 'Moov Money' | 'Orange Money' | 'Wave' | 'Credit';
+export type ModePaiement = 'Especes' | 'Mixx by Yas' | 'Moov Money' | 'Orange Money' | 'Wave' | 'Credit';
+export const TOGO_PAYMENT_MODES: Exclude<ModePaiement, 'Credit'>[] = [
+  'Mixx by Yas',
+  'Moov Money',
+  'Orange Money',
+  'Wave',
+  'Especes',
+];
 export type ChambreStatut = 'LIBRE' | 'OCCUPEE' | 'EN_NETTOYAGE' | 'RESERVEE' | 'HORS_SERVICE';
 
 export interface ZoneLivraison {
@@ -262,7 +269,7 @@ export interface Abonnement {
   formule: FormuleId;
   cycle: CycleAbonnement;
   montant: number;
-  mode_paiement: 'Flooz' | 'Moov Money' | 'Orange Money' | 'Wave' | 'Especes' | 'Essai Gratuit';
+  mode_paiement: 'Mixx by Yas' | 'Moov Money' | 'Orange Money' | 'Wave' | 'Especes' | 'Essai Gratuit';
   reference_transaction: string | null;
   statut: 'EN_ATTENTE' | 'PAYE' | 'REFUSE';
   periode_debut: string;
@@ -284,7 +291,7 @@ export const ROLE_LABELS: Record<RoleType, string> = {
 export const DEFAULT_FORMULES: Formule[] = [
   {
     id: 'bar',
-    nom: 'Formule BAR',
+    nom: 'Formules BAR',
     description: 'Boissons seulement · Serveur, Caissier, Stock Boissons, Paiement',
     prix_mensuel: 7500,
     prix_annuel: 75000,
@@ -296,7 +303,7 @@ export const DEFAULT_FORMULES: Formule[] = [
   },
   {
     id: 'resto',
-    nom: 'Formule RESTO',
+    nom: 'Formules RESTO',
     description: 'Bar + Menu Plats + Cuisine + Crédit Client + Stats + Livraison',
     prix_mensuel: 20000,
     prix_annuel: 200000,
@@ -308,7 +315,7 @@ export const DEFAULT_FORMULES: Formule[] = [
   },
   {
     id: 'premium',
-    nom: 'Formule PREMIUM',
+    nom: 'Formules PREMIUM',
     description: 'Tout RESTO + Module Hôtel Complet (Chambres, Check-in/out, Ménage)',
     prix_mensuel: 35000,
     prix_annuel: 350000,
@@ -319,6 +326,16 @@ export const DEFAULT_FORMULES: Formule[] = [
     max_chambres: 50,
   },
 ];
+
+export function formatFormuleName(nom: string): string {
+  return nom.replace(/^Formule\b/i, 'Formules');
+}
+
+export function getWhatsAppFormuleUrl(formuleNom: string): string {
+  const shortNom = formuleNom.replace(/^Formules?\s+/i, '').trim() || formuleNom;
+  const text = `Bonjour EFA Technologies, je veux acheter la Formule ${shortNom} pour EFA RESTO-LIVRO. Merci de me confirmer.`;
+  return `https://wa.me/22896100972?text=${encodeURIComponent(text)}`;
+}
 
 export const PHOTO_PRESETS = [
   {label: 'Poulet Braisé & Alloco', url: '/src/assets/images/dish_poulet_braise_1795658726782.jpg', cat: 'plat'},

@@ -5,11 +5,13 @@ import {
   Bike,
   ChefHat,
   CreditCard,
+  KeyRound,
   LogOut,
   Package,
   Receipt,
   RefreshCw,
   ShieldAlert,
+  ShieldCheck,
   UserCheck,
   UtensilsCrossed,
   X,
@@ -28,7 +30,6 @@ import {
   SplashScreen,
 } from './components/PWAComponents';
 import {ServeurView} from './components/ServeurView';
-import {SqlSetupModal} from './components/SqlSetupModal';
 import {StatistiquesView} from './components/StatistiquesView';
 import {SuperAdminDashboard} from './components/SuperAdminDashboard';
 import {
@@ -49,11 +50,9 @@ import {
   type ChambreStatut,
   type Commande,
   type CommandeItem,
-  type CycleAbonnement,
   type Employe,
   type Etablissement,
   type Formule,
-  type FormuleId,
   type Livraison,
   type MenageTask,
   type MenuItem,
@@ -90,16 +89,65 @@ interface CachedWorkspace {
   menageTasks: MenageTask[];
 }
 
+interface EmployeeSession {
+  etabId: string;
+  codeEtab: string;
+  employeId: string;
+  nom: string;
+  role: Exclude<RoleType, 'super_admin' | 'patron'>;
+  pin: string;
+}
+
+const EMPLOYEE_SESSION_KEY = 'efa_employee_session_v1';
+const SUPER_ADMIN_EMAIL_ENV = ((import.meta.env.VITE_SUPER_ADMIN_EMAIL as string | undefined) || '')
+  .trim()
+  .toLowerCase();
+
+function checkIsSuperAdminRoute(): boolean {
+  if (typeof window === 'undefined') return false;
+  const cleanHash = window.location.hash.replace(/\/+$/, '').toLowerCase();
+  return cleanHash === '#/super-admin';
+}
+
+function isAuthorizedSuperAdminEmail(email?: string | null): boolean {
+  if (!SUPER_ADMIN_EMAIL_ENV || !email) return false;
+  return email.trim().toLowerCase() === SUPER_ADMIN_EMAIL_ENV;
+}
+
+function getDefaultTabForRole(role: RoleType): NavTab {
+  if (role === 'caissier') return 'caissier';
+  if (role === 'cuisinier') return 'cuisine';
+  if (role === 'livreur') return 'livraison';
+  if (role === 'receptionniste' || role === 'menage') return 'hotel';
+  return 'serveur';
+}
+
 export default function App() {
   const isOnline = useOnlineStatus();
   const [dbReady, setDbReady] = useState<boolean | null>(null);
-  const [dbError, setDbError] = useState<string | undefined>(undefined);
-  const [showSqlHelp, setShowSqlHelp] = useState(false);
+  const [isSuperAdminRoute, setIsSuperAdminRoute] = useState<boolean>(() => checkIsSuperAdminRoute());
 
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [profil, setProfil] = useState<Profil | null>(null);
   const [formules, setFormules] = useState<Formule[]>(DEFAULT_FORMULES);
+
+  // Employee no-email PIN session
+  const [employeeSession, setEmployeeSession] = useState<EmployeeSession | null>(() => {
+    try {
+      const raw = localStorage.getItem(EMPLOYEE_SESSION_KEY);
+      return raw ? (JSON.parse(raw) as EmployeeSession) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [employeeBlockedNotice, setEmployeeBlockedNotice] = useState<string | null>(null);
+
+  // Hidden Super-Admin login form state
+  const [saEmail, setSaEmail] = useState('');
+  const [saPassword, setSaPassword] = useState('');
+  const [saLoading, setSaLoading] = useState(false);
+  const [saError, setSaError] = useState<string | null>(null);
 
   // Establishment workspace state
   const [etab, setEtab] = useState<Etablissement | null>(null);
@@ -136,10 +184,27 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    const onHash = () => setIsSuperAdminRoute(checkIsSuperAdminRoute());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  const clearEmployeeSession = useCallback((notice?: string) => {
+    setEmployeeSession(null);
+    setActiveOperator(null);
+    setEtab(null);
+    try {
+      localStorage.removeItem(EMPLOYEE_SESSION_KEY);
+    } catch {
+      // Ignore
+    }
+    if (notice) setEmployeeBlockedNotice(notice);
+  }, []);
+
   const verifyDatabase = useCallback(async () => {
     const res = await checkDatabaseInitialized();
     setDbReady(res.initialized);
-    setDbError(res.error);
   }, []);
 
   const loadFormules = useCallback(async () => {
@@ -162,7 +227,7 @@ export default function App() {
     }
   }, [dbReady, loadFormules]);
 
-  // Auth listener
+  // Auth listener (Patron & Super-Admin)
   useEffect(() => {
     let mounted = true;
     supabase.auth.getSession().then(({data}) => {
@@ -185,23 +250,74 @@ export default function App() {
     };
   }, []);
 
+  const applyWorkspaceSnapshot = useCallback((etabId: string, snap: CachedWorkspace, save = true) => {
+    setEtab(snap.etab);
+    setEmployes(snap.employes);
+    setMenus(snap.menus);
+    setStock(snap.stock);
+    setApprovisionnements(snap.approvisionnements);
+    setCommandes(snap.commandes);
+    setPaiements(snap.paiements);
+    setLivraisons(snap.livraisons);
+    setChambres(snap.chambres);
+    setReservations(snap.reservations);
+    setSejours(snap.sejours);
+    setMenageTasks(snap.menageTasks);
+    if (save) {
+      saveCachedWorkspace<CachedWorkspace>(etabId, snap);
+    }
+  }, []);
+
   const loadWorkspace = useCallback(
     async (etabId: string) => {
       if (!isOnline) {
         const cached = loadCachedWorkspace<CachedWorkspace>(etabId);
         if (cached) {
-          setEtab(cached.etab);
-          setEmployes(cached.employes);
-          setMenus(cached.menus);
-          setStock(cached.stock);
-          setApprovisionnements(cached.approvisionnements);
-          setCommandes(cached.commandes);
-          setPaiements(cached.paiements);
-          setLivraisons(cached.livraisons);
-          setChambres(cached.chambres);
-          setReservations(cached.reservations);
-          setSejours(cached.sejours);
-          setMenageTasks(cached.menageTasks);
+          applyWorkspaceSnapshot(etabId, cached, false);
+        }
+        return;
+      }
+
+      // Employee no-email RPC workspace loader
+      if (employeeSession && !session) {
+        const {data, error} = await supabase.rpc('employee_get_workspace', {
+          p_etab_id: employeeSession.etabId,
+          p_employe_id: employeeSession.employeId,
+          p_pin: employeeSession.pin,
+        });
+        if (error || !data) {
+          clearEmployeeSession('Votre accès employé a été bloqué ou supprimé par le Patron.');
+          return;
+        }
+        const raw = data as {
+          etab: Etablissement;
+          employes: Employe[];
+          menus: MenuItem[];
+          stock: StockItem[];
+          approvisionnements: Approvisionnement[];
+          commandes: Commande[];
+          paiements: Paiement[];
+          livraisons: Livraison[];
+          chambres: Chambre[];
+          reservations: Reservation[];
+          sejours: Sejour[];
+          menage: MenageTask[];
+        };
+        if (raw.etab) {
+          applyWorkspaceSnapshot(etabId, {
+            etab: raw.etab,
+            employes: raw.employes || [],
+            menus: raw.menus || [],
+            stock: raw.stock || [],
+            approvisionnements: raw.approvisionnements || [],
+            commandes: raw.commandes || [],
+            paiements: raw.paiements || [],
+            livraisons: raw.livraisons || [],
+            chambres: raw.chambres || [],
+            reservations: raw.reservations || [],
+            sejours: raw.sejours || [],
+            menageTasks: raw.menage || [],
+          });
         }
         return;
       }
@@ -269,63 +385,80 @@ export default function App() {
       ]);
 
       if (etabRes.data) {
-        const nextEtab = etabRes.data as Etablissement;
         const nextEmp = (empRes.data || []) as Employe[];
-        const nextMenu = (menuRes.data || []) as MenuItem[];
-        const nextStock = (stockRes.data || []) as StockItem[];
-        const nextAppro = (approRes.data || []) as Approvisionnement[];
-        const nextCmd = (cmdRes.data || []) as Commande[];
-        const nextPay = (payRes.data || []) as Paiement[];
-        const nextLiv = (livRes.data || []) as Livraison[];
-        const nextCh = (chRes.data || []) as Chambre[];
-        const nextRes = (resRes.data || []) as Reservation[];
-        const nextSej = (sejRes.data || []) as Sejour[];
-        const nextMen = (menRes.data || []) as MenageTask[];
-
-        setEtab(nextEtab);
-        setEmployes(nextEmp);
-        setMenus(nextMenu);
-        setStock(nextStock);
-        setApprovisionnements(nextAppro);
-        setCommandes(nextCmd);
-        setPaiements(nextPay);
-        setLivraisons(nextLiv);
-        setChambres(nextCh);
-        setReservations(nextRes);
-        setSejours(nextSej);
-        setMenageTasks(nextMen);
-
-        saveCachedWorkspace<CachedWorkspace>(etabId, {
-          etab: nextEtab,
+        applyWorkspaceSnapshot(etabId, {
+          etab: etabRes.data as Etablissement,
           employes: nextEmp,
-          menus: nextMenu,
-          stock: nextStock,
-          approvisionnements: nextAppro,
-          commandes: nextCmd,
-          paiements: nextPay,
-          livraisons: nextLiv,
-          chambres: nextCh,
-          reservations: nextRes,
-          sejours: nextSej,
-          menageTasks: nextMen,
+          menus: (menuRes.data || []) as MenuItem[],
+          stock: (stockRes.data || []) as StockItem[],
+          approvisionnements: (approRes.data || []) as Approvisionnement[],
+          commandes: (cmdRes.data || []) as Commande[],
+          paiements: (payRes.data || []) as Paiement[],
+          livraisons: (livRes.data || []) as Livraison[],
+          chambres: (chRes.data || []) as Chambre[],
+          reservations: (resRes.data || []) as Reservation[],
+          sejours: (sejRes.data || []) as Sejour[],
+          menageTasks: (menRes.data || []) as MenageTask[],
         });
       }
     },
-    [isOnline]
+    [isOnline, employeeSession, session, applyWorkspaceSnapshot, clearEmployeeSession]
   );
 
+  // Enforce active employee check if activeOperator gets blocked/deleted on shared POS
+  useEffect(() => {
+    if (!activeOperator?.id || employes.length === 0) return;
+    const match = employes.find((e) => e.id === activeOperator.id);
+    if (!match || !match.actif) {
+      if (employeeSession && !session) {
+        clearEmployeeSession('Votre compte employé a été bloqué ou supprimé par le Patron.');
+      } else if (profil) {
+        setActiveOperator({id: null, nom: profil.nom, role: profil.role});
+      }
+    }
+  }, [employes, activeOperator?.id, employeeSession, session, profil, clearEmployeeSession]);
+
   const loadProfilAndData = useCallback(async () => {
-    if (!dbReady || !session?.user) {
+    if (!dbReady) return;
+
+    // 1. Standalone Employee PIN Session (No Supabase Auth user)
+    if (!session?.user) {
       setProfil(null);
-      setEtab(null);
+      if (employeeSession) {
+        setActiveOperator({
+          id: employeeSession.employeId,
+          nom: employeeSession.nom,
+          role: employeeSession.role,
+        });
+        setActiveTab(getDefaultTabForRole(employeeSession.role));
+        await loadWorkspace(employeeSession.etabId);
+      } else {
+        setEtab(null);
+      }
       return;
     }
 
-    const {data: prof} = await supabase
+    // 2. Supabase Auth Session (Patron or Super-Admin)
+    let {data: prof} = await supabase
       .from('profils')
       .select('*')
       .eq('id', session.user.id)
       .maybeSingle();
+
+    // Auto-bind Super-Admin profile on /#/super-admin if email matches VITE_SUPER_ADMIN_EMAIL (no email confirmation)
+    if (
+      isSuperAdminRoute &&
+      isAuthorizedSuperAdminEmail(session.user.email) &&
+      (!prof || (prof as Profil).role !== 'super_admin')
+    ) {
+      await supabase.rpc('bootstrap_super_admin', {p_nom: 'Super-Admin EFA'});
+      const refreshed = await supabase
+        .from('profils')
+        .select('*')
+        .eq('id', session.user.id)
+        .maybeSingle();
+      prof = refreshed.data;
+    }
 
     if (!prof) {
       setProfil(null);
@@ -335,33 +468,30 @@ export default function App() {
 
     const typedProf = prof as Profil;
     setProfil(typedProf);
-    setActiveOperator((prev) =>
-      prev || {
-        id: null,
-        nom: typedProf.nom,
-        role: typedProf.role,
+
+    if (typedProf.role !== 'super_admin') {
+      setActiveOperator((prev) =>
+        prev || {
+          id: null,
+          nom: typedProf.nom,
+          role: typedProf.role,
+        }
+      );
+      setActiveTab(getDefaultTabForRole(typedProf.role));
+      if (typedProf.etablissement_id) {
+        await loadWorkspace(typedProf.etablissement_id);
       }
-    );
-
-    if (typedProf.role === 'serveur') setActiveTab('serveur');
-    else if (typedProf.role === 'caissier') setActiveTab('caissier');
-    else if (typedProf.role === 'cuisinier') setActiveTab('cuisine');
-    else if (typedProf.role === 'livreur') setActiveTab('livraison');
-    else if (typedProf.role === 'receptionniste' || typedProf.role === 'menage') setActiveTab('hotel');
-
-    if (typedProf.etablissement_id) {
-      await loadWorkspace(typedProf.etablissement_id);
     }
-  }, [dbReady, session, loadWorkspace]);
+  }, [dbReady, session, employeeSession, isSuperAdminRoute, loadWorkspace]);
 
   useEffect(() => {
     loadProfilAndData();
   }, [loadProfilAndData]);
 
-  // Realtime subscription (unique channel name per mount -> zero duplicate errors in React 19 StrictMode)
+  // Realtime subscription
   useEffect(() => {
     const etabId = etab?.id;
-    if (!dbReady || !etabId || !isOnline) return;
+    if (!dbReady || !etabId || !isOnline || isSuperAdminRoute) return;
 
     const channelName = `efa-live-${etabId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const channel = supabase
@@ -401,12 +531,19 @@ export default function App() {
           void loadWorkspace(etabId);
         }
       )
+      .on(
+        'postgres_changes',
+        {event: '*', schema: 'public', table: 'employes', filter: `etablissement_id=eq.${etabId}`},
+        () => {
+          void loadWorkspace(etabId);
+        }
+      )
       .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [dbReady, etab?.id, isOnline, loadWorkspace]);
+  }, [dbReady, etab?.id, isOnline, isSuperAdminRoute, loadWorkspace]);
 
   // Offline auto-sync when connectivity returns
   const handleSyncNow = useCallback(async () => {
@@ -433,9 +570,12 @@ export default function App() {
 
   const readOnlyState = useMemo(() => isEtabReadOnly(etab), [etab]);
 
-  const operatorRole = activeOperator?.role || profil?.role || 'serveur';
-  const operatorName = activeOperator?.nom || profil?.nom || 'Opérateur';
+  const activeEmployes = useMemo(() => employes.filter((e) => e.actif), [employes]);
+
+  const operatorRole = activeOperator?.role || profil?.role || employeeSession?.role || 'serveur';
+  const operatorName = activeOperator?.nom || profil?.nom || employeeSession?.nom || 'Opérateur';
   const isPatron = operatorRole === 'patron';
+  const isEmployeeMode = Boolean(employeeSession && !session);
 
   const navItems = useMemo(() => {
     if (!etab) return [];
@@ -489,7 +629,6 @@ export default function App() {
     return all.filter((item) => item.visible);
   }, [etab, isPatron, operatorRole]);
 
-  // Keep activeTab valid when switching roles/formulas
   useEffect(() => {
     if (navItems.length > 0 && !navItems.some((n) => n.id === activeTab)) {
       setActiveTab(navItems[0].id);
@@ -497,11 +636,164 @@ export default function App() {
   }, [navItems, activeTab]);
 
   // --------------------------------------------------------------------------
-  // MUTATIONS (Connected to Supabase + Offline Queue Fallback)
+  // EMPLOYEE LOGIN (Code + Name + 4-digit PIN, zero email)
+  // --------------------------------------------------------------------------
+  const handleEmployeePinLogin = async ({
+    codeEtab,
+    employeId,
+    pin,
+  }: {
+    codeEtab: string;
+    employeId: string;
+    pin: string;
+  }): Promise<{ok: boolean; error?: string}> => {
+    setEmployeeBlockedNotice(null);
+    const cleanCode = codeEtab.trim().toUpperCase();
+    const cleanPin = pin.trim();
+
+    if (!isOnline) {
+      // Offline verification against cached workspace
+      const cached = Object.keys(localStorage)
+        .filter((k) => k.startsWith('efa_workspace_cache_v1_'))
+        .map((k) => {
+          try {
+            return JSON.parse(localStorage.getItem(k) || '') as CachedWorkspace;
+          } catch {
+            return null;
+          }
+        })
+        .find((ws) => ws && ws.etab?.code_etablissement?.toUpperCase() === cleanCode);
+
+      if (!cached) {
+        return {ok: false, error: 'Mode hors-ligne : cet établissement doit d’abord être chargé en ligne.'};
+      }
+      const emp = cached.employes.find((x) => x.id === employeId);
+      if (!emp || !emp.actif) {
+        return {ok: false, error: 'Employé bloqué ou supprimé.'};
+      }
+      if (emp.pin_code !== cleanPin && emp.pin_code !== '****') {
+        return {ok: false, error: 'Code PIN incorrect.'};
+      }
+      const nextSess: EmployeeSession = {
+        etabId: cached.etab.id,
+        codeEtab: cleanCode,
+        employeId: emp.id,
+        nom: emp.nom,
+        role: emp.role as Exclude<RoleType, 'super_admin' | 'patron'>,
+        pin: cleanPin,
+      };
+      setEmployeeSession(nextSess);
+      localStorage.setItem(EMPLOYEE_SESSION_KEY, JSON.stringify(nextSess));
+      setActiveOperator({id: emp.id, nom: emp.nom, role: emp.role});
+      setActiveTab(getDefaultTabForRole(emp.role));
+      applyWorkspaceSnapshot(cached.etab.id, cached, false);
+      return {ok: true};
+    }
+
+    const {data, error} = await supabase.rpc('verify_employee_pin_login', {
+      p_code_etab: cleanCode,
+      p_employe_id: employeId,
+      p_pin: cleanPin,
+    });
+
+    if (error || !data) {
+      return {ok: false, error: error?.message || 'Code PIN incorrect ou accès bloqué'};
+    }
+
+    const res = data as {
+      ok: boolean;
+      etablissement: Etablissement;
+      employe: {
+        id: string;
+        etablissement_id: string;
+        nom: string;
+        role: Exclude<RoleType, 'super_admin' | 'patron'>;
+        actif: boolean;
+      };
+    };
+
+    const nextSess: EmployeeSession = {
+      etabId: res.etablissement.id,
+      codeEtab: cleanCode,
+      employeId: res.employe.id,
+      nom: res.employe.nom,
+      role: res.employe.role,
+      pin: cleanPin,
+    };
+
+    setEmployeeSession(nextSess);
+    try {
+      localStorage.setItem(EMPLOYEE_SESSION_KEY, JSON.stringify(nextSess));
+    } catch {
+      // Ignore
+    }
+    setActiveOperator({id: res.employe.id, nom: res.employe.nom, role: res.employe.role});
+    setActiveTab(getDefaultTabForRole(res.employe.role));
+    return {ok: true};
+  };
+
+  // Helper to run employee RPC mutations cleanly
+  const runEmployeeMutation = async (
+    action: string,
+    payload: Record<string, unknown>,
+    offlineDescription: string
+  ): Promise<{ok: boolean; error?: string; data?: unknown}> => {
+    if (!employeeSession) return {ok: false, error: 'Session employé manquante'};
+    const params = {
+      p_etab_id: employeeSession.etabId,
+      p_employe_id: employeeSession.employeId,
+      p_pin: employeeSession.pin,
+      p_action: action,
+      p_payload: payload,
+    };
+
+    if (!isOnline) {
+      const next = enqueueOfflineOp({
+        type: 'rpc',
+        fn: 'employee_mutate_workspace',
+        params,
+        description: offlineDescription,
+      });
+      setPendingOps(next.length);
+      return {ok: true};
+    }
+
+    const {data, error} = await supabase.rpc('employee_mutate_workspace', params);
+    if (error) {
+      if (error.message.toLowerCase().includes('bloqué') || error.message.toLowerCase().includes('refusé')) {
+        clearEmployeeSession('Votre accès employé a été bloqué ou supprimé par le Patron.');
+      }
+      return {ok: false, error: error.message};
+    }
+    if (etab?.id) await loadWorkspace(etab.id);
+    return {ok: true, data};
+  };
+
+  // --------------------------------------------------------------------------
+  // MUTATIONS (Patron Supabase direct OR Employee PIN RPC + Offline Queue)
   // --------------------------------------------------------------------------
   const handleCreateCommande = async (
     payload: Omit<Commande, 'id' | 'created_at' | 'validated_at' | 'paid_at'>
   ) => {
+    if (isEmployeeMode) {
+      if (!isOnline) {
+        const localCmd: Commande = {
+          ...payload,
+          id: `offline-${Date.now()}`,
+          created_at: new Date().toISOString(),
+          validated_at: null,
+          paid_at: null,
+        };
+        setCommandes((prev) => [localCmd, ...prev]);
+      }
+      const res = await runEmployeeMutation(
+        'create_commande',
+        payload as unknown as Record<string, unknown>,
+        `Commande ${payload.numero_bon}`
+      );
+      return {ok: res.ok, error: res.error, numeroBon: payload.numero_bon};
+    }
+
     if (!isOnline) {
       const localCmd: Commande = {
         ...payload,
@@ -533,6 +825,18 @@ export default function App() {
       caissier_nom: caissierNom,
       validated_at: new Date().toISOString(),
     };
+
+    if (isEmployeeMode) {
+      if (!isOnline) {
+        setCommandes((prev) => prev.map((c) => (c.id === commande.id ? {...c, ...patch} : c)));
+      }
+      return runEmployeeMutation(
+        'validate_commande',
+        {id: commande.id, caissier_nom: caissierNom},
+        `Validation ${commande.numero_bon}`
+      );
+    }
+
     if (!isOnline || commande.id.startsWith('offline-')) {
       setCommandes((prev) => prev.map((c) => (c.id === commande.id ? {...c, ...patch} : c)));
       const next = enqueueOfflineOp({
@@ -575,6 +879,28 @@ export default function App() {
       caissier_nom: caissierNom,
       paid_at: mode === 'SUR_CHAMBRE' ? null : new Date().toISOString(),
     };
+
+    if (isEmployeeMode) {
+      if (!isOnline) {
+        setCommandes((prev) => prev.map((c) => (c.id === commande.id ? {...c, ...cmdPatch} : c)));
+      }
+      return runEmployeeMutation(
+        'encaisser_commande',
+        {
+          commande_id: commande.id,
+          sejour_id: commande.sejour_id || '',
+          statut_caisse: nextStatus,
+          mode_paiement: mode,
+          montant: commande.montant_total,
+          client_nom: clientNom || '',
+          client_tel: clientTel || '',
+          est_regle: mode !== 'Credit',
+          caissier_nom: caissierNom,
+          reference: reference || '',
+        },
+        `Encaissement ${commande.numero_bon}`
+      );
+    }
 
     if (!isOnline) {
       setCommandes((prev) => prev.map((c) => (c.id === commande.id ? {...c, ...cmdPatch} : c)));
@@ -640,6 +966,23 @@ export default function App() {
     caissierNom: string
   ) => {
     if (!etab) return {ok: false, error: 'Établissement introuvable'};
+    if (isEmployeeMode) {
+      return runEmployeeMutation(
+        'settle_credit',
+        {
+          paiement_id: paiement.id,
+          commande_id: paiement.commande_id || '',
+          mode_paiement: mode,
+          montant: paiement.montant,
+          client_nom: paiement.client_nom || '',
+          client_tel: paiement.client_tel || '',
+          caissier_nom: caissierNom,
+          reference: `REG-${paiement.id.slice(0, 6)}`,
+        },
+        `Règlement crédit ${paiement.client_nom || ''}`
+      );
+    }
+
     const {error: updErr} = await supabase
       .from('paiements')
       .update({est_regle: true})
@@ -668,6 +1011,17 @@ export default function App() {
     commande: Commande,
     status: 'EN_PREPARATION' | 'PRET' | 'SERVI'
   ) => {
+    if (isEmployeeMode) {
+      setCommandes((prev) =>
+        prev.map((c) => (c.id === commande.id ? {...c, statut_cuisine: status} : c))
+      );
+      return runEmployeeMutation(
+        'update_kitchen_status',
+        {id: commande.id, statut_cuisine: status},
+        `Cuisine ${commande.numero_bon} -> ${status}`
+      );
+    }
+
     if (!isOnline) {
       setCommandes((prev) =>
         prev.map((c) => (c.id === commande.id ? {...c, statut_cuisine: status} : c))
@@ -709,6 +1063,28 @@ export default function App() {
     const montantItems = params.items.reduce((s, i) => s + i.prix * i.quantite, 0);
     const total = montantItems + params.fraisLivraison;
     const numeroBon = `LIV-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    if (isEmployeeMode) {
+      return runEmployeeMutation(
+        'create_delivery',
+        {
+          numero_bon: numeroBon,
+          cible: `Livraison · ${params.quartier}`,
+          operateur_nom: params.operateurNom,
+          items: params.items,
+          montant_items: montantItems,
+          frais_livraison: params.fraisLivraison,
+          montant_total: total,
+          client_nom: params.clientNom,
+          client_tel: params.clientTel,
+          quartier: params.quartier,
+          adresse_detail: params.adresseDetail,
+          livreur_id: params.livreurId || '',
+          livreur_nom: params.livreurNom || '',
+        },
+        `Livraison ${numeroBon}`
+      );
+    }
 
     const {data: cmdData, error: cmdErr} = await supabase
       .from('commandes')
@@ -758,6 +1134,22 @@ export default function App() {
     livreurNom: string
   ) => {
     if (!etab) return {ok: false, error: 'Établissement introuvable'};
+    if (isEmployeeMode) {
+      return runEmployeeMutation(
+        'update_delivery_status',
+        {
+          livraison_id: livraison.id,
+          commande_id: livraison.commande_id,
+          statut,
+          livreur_nom: livreurNom,
+          montant: livraison.montant_a_encaisser,
+          client_nom: livraison.client_nom,
+          client_tel: livraison.client_tel,
+        },
+        `Livraison ${livraison.client_nom} -> ${statut}`
+      );
+    }
+
     const patch = {
       statut,
       livreur_nom: livreurNom,
@@ -798,6 +1190,9 @@ export default function App() {
   };
 
   const handleUpdateChambreStatut = async (chambreId: string, statut: ChambreStatut) => {
+    if (isEmployeeMode) {
+      return runEmployeeMutation('update_chambre_statut', {chambre_id: chambreId, statut}, `Chambre -> ${statut}`);
+    }
     const {error} = await supabase.from('chambres').update({statut}).eq('id', chambreId);
     if (error) return {ok: false, error: error.message};
     if (etab?.id) await loadWorkspace(etab.id);
@@ -807,6 +1202,9 @@ export default function App() {
   const handleCheckIn = async (
     payload: Omit<Sejour, 'id' | 'created_at' | 'heure_depart_reelle' | 'statut' | 'supplement_prolongation'>
   ) => {
+    if (isEmployeeMode) {
+      return runEmployeeMutation('check_in', payload as unknown as Record<string, unknown>, `Check-in ${payload.chambre_numero}`);
+    }
     const {error: sejErr} = await supabase.from('sejours').insert({...payload, statut: 'EN_COURS'});
     if (sejErr) return {ok: false, error: sejErr.message};
 
@@ -829,6 +1227,23 @@ export default function App() {
     caissierNom: string;
   }) => {
     if (!etab) return {ok: false, error: 'Établissement introuvable'};
+    if (isEmployeeMode) {
+      return runEmployeeMutation(
+        'check_out',
+        {
+          sejour_id: sejour.id,
+          supplement_prolongation: supplementProlongation,
+          montant: montantTotalFacture,
+          mode_paiement: modePaiement,
+          client_nom: sejour.client_nom,
+          client_tel: sejour.client_tel,
+          caissier_nom: caissierNom,
+          reference: `CH-${sejour.chambre_numero}`,
+        },
+        `Check-out Ch. ${sejour.chambre_numero}`
+      );
+    }
+
     const nowIso = new Date().toISOString();
 
     const {error: sejErr} = await supabase
@@ -841,7 +1256,6 @@ export default function App() {
       .eq('id', sejour.id);
     if (sejErr) return {ok: false, error: sejErr.message};
 
-    // Close linked SUR_CHAMBRE orders
     await supabase
       .from('commandes')
       .update({statut_caisse: 'ENCAISSEE', paid_at: nowIso})
@@ -869,6 +1283,9 @@ export default function App() {
   const handleCreateReservation = async (
     payload: Omit<Reservation, 'id' | 'created_at' | 'statut'>
   ) => {
+    if (isEmployeeMode) {
+      return runEmployeeMutation('create_reservation', payload as unknown as Record<string, unknown>, 'Nouvelle réservation');
+    }
     const {error} = await supabase.from('reservations').insert({...payload, statut: 'CONFIRMEE'});
     if (error) return {ok: false, error: error.message};
     await supabase.from('chambres').update({statut: 'RESERVEE'}).eq('id', payload.chambre_id);
@@ -881,6 +1298,14 @@ export default function App() {
     chambreId: string,
     statut: 'HONOREE' | 'ANNULEE'
   ) => {
+    if (isEmployeeMode) {
+      await runEmployeeMutation(
+        'update_reservation_statut',
+        {reservation_id: resId, chambre_id: chambreId, statut},
+        `Réservation -> ${statut}`
+      );
+      return;
+    }
     await supabase.from('reservations').update({statut}).eq('id', resId);
     if (statut === 'ANNULEE') {
       await supabase.from('chambres').update({statut: 'LIBRE'}).eq('id', chambreId);
@@ -889,6 +1314,13 @@ export default function App() {
   };
 
   const handleCleanRoom = async (task: MenageTask, agentNom: string) => {
+    if (isEmployeeMode) {
+      return runEmployeeMutation(
+        'clean_room',
+        {task_id: task.id, chambre_id: task.chambre_id, agent_nom: agentNom},
+        `Ménage Ch. ${task.chambre_numero}`
+      );
+    }
     const {error: mErr} = await supabase
       .from('menage')
       .update({statut: 'NETTOYEE', agent_nom: agentNom, completed_at: new Date().toISOString()})
@@ -900,7 +1332,7 @@ export default function App() {
     return {ok: true};
   };
 
-  // Menu, Stock, Staff, Config & Abonnement mutations
+  // Menu, Stock, Staff (Create, Block/Unblock, Delete) & Config mutations (Patron only)
   const handleCreateMenu = async (m: Omit<MenuItem, 'id' | 'created_at' | 'actif'>) => {
     const {error} = await supabase.from('menus').insert({...m, actif: true});
     if (error) return {ok: false, error: error.message};
@@ -940,6 +1372,27 @@ export default function App() {
     return {ok: true};
   };
 
+  const handleToggleEmployeActif = async (emp: Employe) => {
+    const nextActif = !emp.actif;
+    const {error} = await supabase.from('employes').update({actif: nextActif}).eq('id', emp.id);
+    if (error) return {ok: false, error: error.message};
+    if (!nextActif && activeOperator?.id === emp.id && profil) {
+      setActiveOperator({id: null, nom: profil.nom, role: profil.role});
+    }
+    if (etab?.id) await loadWorkspace(etab.id);
+    return {ok: true};
+  };
+
+  const handleDeleteEmploye = async (emp: Employe) => {
+    const {error} = await supabase.from('employes').delete().eq('id', emp.id);
+    if (error) return {ok: false, error: error.message};
+    if (activeOperator?.id === emp.id && profil) {
+      setActiveOperator({id: null, nom: profil.nom, role: profil.role});
+    }
+    if (etab?.id) await loadWorkspace(etab.id);
+    return {ok: true};
+  };
+
   const handleUpdateEtabConfig = async (patch: Partial<Etablissement>) => {
     if (!etab) return {ok: false, error: 'Établissement manquant'};
     const {error} = await supabase.from('etablissements').update(patch).eq('id', etab.id);
@@ -948,45 +1401,11 @@ export default function App() {
     return {ok: true};
   };
 
-  const handlePayAbonnement = async ({
-    formule,
-    cycle,
-    mode,
-    reference,
-  }: {
-    formule: FormuleId;
-    cycle: CycleAbonnement;
-    mode: 'Flooz' | 'Moov Money' | 'Orange Money' | 'Wave';
-    reference: string;
-  }) => {
-    if (!etab) return {ok: false, error: 'Établissement manquant'};
-    const fObj = formules.find((f) => f.id === formule);
-    const montant = cycle === 'mensuel' ? fObj?.prix_mensuel || 0 : fObj?.prix_annuel || 0;
-    const start = new Date();
-    const end = new Date(start);
-    end.setDate(end.getDate() + (cycle === 'mensuel' ? 30 : 365));
-
-    const {error} = await supabase.from('abonnements').insert({
-      etablissement_id: etab.id,
-      formule,
-      cycle,
-      montant,
-      mode_paiement: mode,
-      reference_transaction: reference,
-      statut: 'PAYE',
-      periode_debut: start.toISOString(),
-      periode_fin: end.toISOString(),
-    });
-    if (error) return {ok: false, error: error.message};
-    await loadWorkspace(etab.id);
-    return {ok: true};
-  };
-
   const handlePinSwitch = (e: React.FormEvent) => {
     e.preventDefault();
-    const emp = employes.find((x) => x.id === selectedEmpId);
-    if (!emp) {
-      setPinError('Sélectionnez un employé.');
+    const emp = activeEmployes.find((x) => x.id === selectedEmpId);
+    if (!emp || !emp.actif) {
+      setPinError('Employé inactif, bloqué ou supprimé.');
       return;
     }
     if (emp.pin_code !== pinInput.trim()) {
@@ -1000,10 +1419,43 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    if (session) {
+      await supabase.auth.signOut();
+    }
     setProfil(null);
-    setEtab(null);
-    setActiveOperator(null);
+    clearEmployeeSession();
+  };
+
+  // Hidden Super-Admin Sign-in (No confirmation, verified via VITE_SUPER_ADMIN_EMAIL)
+  const handleSuperAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaError(null);
+    if (!SUPER_ADMIN_EMAIL_ENV) {
+      setSaError('Configuration Super-Admin manquante (VITE_SUPER_ADMIN_EMAIL).');
+      return;
+    }
+    if (saEmail.trim().toLowerCase() !== SUPER_ADMIN_EMAIL_ENV) {
+      setSaError('Accès refusé : e-mail non autorisé.');
+      return;
+    }
+    setSaLoading(true);
+    try {
+      const {data, error} = await supabase.auth.signInWithPassword({
+        email: saEmail.trim(),
+        password: saPassword,
+      });
+      if (error) throw error;
+      if (!isAuthorizedSuperAdminEmail(data.user?.email)) {
+        await supabase.auth.signOut();
+        setSaError('Accès refusé.');
+        return;
+      }
+      await loadProfilAndData();
+    } catch (err: unknown) {
+      setSaError(err instanceof Error ? err.message : 'Identifiants invalides');
+    } finally {
+      setSaLoading(false);
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -1013,36 +1465,117 @@ export default function App() {
     return <SplashScreen />;
   }
 
-  if (dbReady === false || showSqlHelp) {
+  // No SQL exposed to clients if server connection fails
+  if (dbReady === false) {
     return (
-      <SqlSetupModal
-        errorMessage={dbError}
-        onRetryConnection={async () => {
-          await verifyDatabase();
-          await loadFormules();
-          setShowSqlHelp(false);
-        }}
-        closable={Boolean(dbReady)}
-        onClose={() => setShowSqlHelp(false)}
-      />
+      <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center p-4">
+        <div className="w-full max-w-sm rounded-2xl border border-stone-200 bg-white p-7 text-center space-y-4 shadow-sm">
+          <img
+            src="/logo-efa-clean.png"
+            alt="EFA RESTO-LIVRO"
+            className="w-36 h-auto mx-auto object-contain"
+          />
+          <h1 className="font-display text-lg font-bold text-[#161614]">
+            Connexion au serveur en cours
+          </h1>
+          <p className="text-xs text-stone-600 leading-relaxed">
+            Impossible de joindre le serveur EFA RESTO-LIVRO pour le moment. Vérifiez votre connexion internet et réessayez.
+          </p>
+          <button
+            type="button"
+            onClick={async () => {
+              await verifyDatabase();
+              await loadFormules();
+            }}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#0E8A55] py-3 text-sm font-bold text-white hover:bg-[#0B7145] min-h-[48px]"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Réessayer
+          </button>
+        </div>
+      </div>
     );
   }
 
-  if (!session || !profil) {
-    return (
-      <AuthScreen
-        formules={formules}
-        pendingUserEmail={session?.user?.email}
-        pendingUserId={session?.user?.id}
-        onAuthComplete={loadProfilAndData}
-        onSignOut={session ? handleSignOut : undefined}
-        onOpenSqlSetup={() => setShowSqlHelp(true)}
-      />
-    );
-  }
+  // SECRET SUPER-ADMIN ROUTE: /#/super-admin ONLY
+  if (isSuperAdminRoute) {
+    const isVerifiedSa =
+      Boolean(session?.user) &&
+      isAuthorizedSuperAdminEmail(session?.user?.email) &&
+      profil?.role === 'super_admin';
 
-  // SUPER-ADMIN SHELL
-  if (profil.role === 'super_admin') {
+    if (!isVerifiedSa) {
+      return (
+        <div className="min-h-screen bg-[#FAF9F6] text-[#161614] flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 sm:p-8 shadow-sm space-y-5">
+            <div className="flex flex-col items-center text-center space-y-2 border-b border-stone-100 pb-5">
+              <img
+                src="/logo-efa-clean.png"
+                alt="EFA RESTO-LIVRO"
+                className="w-36 h-auto object-contain"
+              />
+              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 uppercase tracking-wider pt-2">
+                <ShieldCheck className="w-4 h-4" />
+                Espace Privé Super-Admin
+              </div>
+            </div>
+
+            {session?.user && !isAuthorizedSuperAdminEmail(session.user.email) && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs text-red-800 space-y-2">
+                <p className="font-semibold">Ce compte n’est pas autorisé pour l’espace Super-Admin.</p>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="underline font-bold"
+                >
+                  Changer de compte
+                </button>
+              </div>
+            )}
+
+            {saError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-medium text-red-800">
+                {saError}
+              </div>
+            )}
+
+            <form onSubmit={handleSuperAdminLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">E-mail Super-Admin</label>
+                <input
+                  type="email"
+                  required
+                  value={saEmail}
+                  onChange={(e) => setSaEmail(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full rounded-xl border border-stone-300 px-3.5 py-3 text-sm focus:border-emerald-700 focus:outline-none min-h-[48px]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">Mot de passe</label>
+                <input
+                  type="password"
+                  required
+                  value={saPassword}
+                  onChange={(e) => setSaPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full rounded-xl border border-stone-300 px-3.5 py-3 text-sm focus:border-emerald-700 focus:outline-none min-h-[48px]"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={saLoading}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#161614] py-3.5 text-sm font-bold text-white hover:bg-stone-800 disabled:opacity-60 min-h-[52px]"
+              >
+                <KeyRound className="w-4 h-4" />
+                {saLoading ? 'Connexion...' : 'Accéder à la console'}
+              </button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-[#FAF9F6] text-[#161614] flex flex-col overflow-x-hidden">
         <PWAInstallBanner />
@@ -1050,9 +1583,9 @@ export default function App() {
           <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-2.5 min-w-0">
               <img
-                src="/logo-emblem.png"
+                src="/pwa-192x192.png"
                 alt="Logo EFA RESTO-LIVRO"
-                className="w-9 h-9 rounded-full object-contain shrink-0"
+                className="w-9 h-9 rounded-full object-contain shrink-0 border border-stone-100"
               />
               <span className="font-display text-base sm:text-lg font-extrabold tracking-tight text-[#161614] truncate">
                 EFA RESTO-LIVRO · Super-Admin
@@ -1076,6 +1609,37 @@ export default function App() {
           <SuperAdminDashboard formules={formules} onRefreshFormules={loadFormules} />
         </main>
       </div>
+    );
+  }
+
+  // PUBLIC / ESTABLISHMENT GATE (Patron Auth OR Employee PIN Auth)
+  const hasPatronSession = Boolean(session && profil && profil.role !== 'super_admin');
+  const hasEmployeeSession = Boolean(employeeSession);
+
+  if (!hasPatronSession && !hasEmployeeSession) {
+    return (
+      <>
+        {employeeBlockedNotice && (
+          <div className="bg-red-700 text-white px-4 py-2.5 text-xs font-semibold flex items-center justify-between gap-2">
+            <span>{employeeBlockedNotice}</span>
+            <button
+              type="button"
+              onClick={() => setEmployeeBlockedNotice(null)}
+              className="underline shrink-0"
+            >
+              Fermer
+            </button>
+          </div>
+        )}
+        <AuthScreen
+          formules={formules}
+          pendingUserEmail={profil?.role === 'super_admin' ? null : session?.user?.email}
+          pendingUserId={profil?.role === 'super_admin' ? null : session?.user?.id}
+          onAuthComplete={loadProfilAndData}
+          onEmployeePinLogin={handleEmployeePinLogin}
+          onSignOut={session ? handleSignOut : undefined}
+        />
+      </>
     );
   }
 
@@ -1132,9 +1696,9 @@ export default function App() {
           <div className="space-y-6">
             <div className="px-1 flex items-center gap-2.5">
               <img
-                src="/logo-emblem.png"
+                src="/pwa-192x192.png"
                 alt="Logo EFA RESTO-LIVRO"
-                className="w-10 h-10 rounded-full object-contain shrink-0"
+                className="w-10 h-10 rounded-full object-contain shrink-0 border border-stone-100"
               />
               <div className="min-w-0">
                 <span className="font-display text-sm font-extrabold tracking-tight text-[#161614] block truncate">
@@ -1171,11 +1735,13 @@ export default function App() {
               <p className="text-xs font-bold text-[#161614] truncate">{operatorName}</p>
               <p className="text-[11px] text-stone-500">{ROLE_LABELS[operatorRole]}</p>
             </div>
-            {employes.length > 1 && (
+            {hasPatronSession && activeEmployes.length > 0 && (
               <button
                 type="button"
                 onClick={() => {
-                  setSelectedEmpId(employes[0]?.id || '');
+                  setSelectedEmpId(activeEmployes[0]?.id || '');
+                  setPinInput('');
+                  setPinError(null);
                   setShowPinSwitch(true);
                 }}
                 className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-stone-300 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 min-h-[48px]"
@@ -1202,9 +1768,9 @@ export default function App() {
             <div className="min-w-0 flex items-center gap-2.5">
               <div className="md:hidden flex items-center gap-2 min-w-0">
                 <img
-                  src="/logo-emblem.png"
+                  src="/pwa-192x192.png"
                   alt="Logo EFA RESTO-LIVRO"
-                  className="w-8 h-8 rounded-full object-contain shrink-0"
+                  className="w-8 h-8 rounded-full object-contain shrink-0 border border-stone-100"
                 />
                 <div className="min-w-0">
                   <span className="font-display text-xs font-extrabold text-[#161614] block leading-tight truncate">
@@ -1219,7 +1785,7 @@ export default function App() {
                 {etab.ville || 'Afrique'} ·{' '}
                 {etab.statut_abonnement === 'essai'
                   ? `Essai gratuit jusqu’au ${new Date(etab.essai_fin).toLocaleDateString('fr-FR')}`
-                  : `Formule ${etab.formule.toUpperCase()} active`}
+                  : `Formules ${etab.formule.toUpperCase()} active`}
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -1234,17 +1800,21 @@ export default function App() {
                 <RefreshCw className="w-4 h-4" />
                 <span className="hidden sm:inline">Actualiser</span>
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedEmpId(employes[0]?.id || '');
-                  setShowPinSwitch(true);
-                }}
-                className="md:hidden inline-flex items-center justify-center gap-1 rounded-xl border border-stone-200 px-3 py-2 text-xs font-semibold text-stone-700 min-h-[48px]"
-              >
-                <UserCheck className="w-4 h-4" />
-                PIN
-              </button>
+              {hasPatronSession && activeEmployes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedEmpId(activeEmployes[0]?.id || '');
+                    setPinInput('');
+                    setPinError(null);
+                    setShowPinSwitch(true);
+                  }}
+                  className="md:hidden inline-flex items-center justify-center gap-1 rounded-xl border border-stone-200 px-3 py-2 text-xs font-semibold text-stone-700 min-h-[48px]"
+                >
+                  <UserCheck className="w-4 h-4" />
+                  PIN
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleSignOut}
@@ -1296,7 +1866,7 @@ export default function App() {
                 etab={etab}
                 menus={menus}
                 livraisons={livraisons}
-                employes={employes}
+                employes={activeEmployes}
                 operatorName={operatorName}
                 readOnly={readOnlyState.readOnly}
                 onCreateDeliveryOrder={handleCreateDeliveryOrder}
@@ -1342,8 +1912,9 @@ export default function App() {
                 onCreateStock={handleCreateStock}
                 onApprovisionner={handleApprovisionner}
                 onCreateEmploye={handleCreateEmploye}
+                onToggleEmployeActif={handleToggleEmployeActif}
+                onDeleteEmploye={handleDeleteEmploye}
                 onUpdateEtabConfig={handleUpdateEtabConfig}
-                onPayAbonnement={handlePayAbonnement}
               />
             )}
 
@@ -1379,7 +1950,7 @@ export default function App() {
         </div>
       </nav>
 
-      {/* PIN Switcher Modal */}
+      {/* PIN Switcher Modal (Patron shared device only, active employees only) */}
       {showPinSwitch && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <form
@@ -1404,7 +1975,7 @@ export default function App() {
                 onChange={(e) => setSelectedEmpId(e.target.value)}
                 className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm min-h-[48px]"
               >
-                {employes.map((emp) => (
+                {activeEmployes.map((emp) => (
                   <option key={emp.id} value={emp.id}>
                     {emp.nom} ({ROLE_LABELS[emp.role]})
                   </option>
@@ -1412,13 +1983,14 @@ export default function App() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">Code PIN</label>
+              <label className="block text-xs font-semibold text-stone-700 mb-1">Code PIN (4 chiffres)</label>
               <input
                 type="password"
                 inputMode="numeric"
+                maxLength={4}
                 required
                 value={pinInput}
-                onChange={(e) => setPinInput(e.target.value)}
+                onChange={(e) => setPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
                 placeholder="••••"
                 className="w-full rounded-xl border border-stone-300 px-3 py-2.5 text-center font-mono text-lg tracking-widest min-h-[48px]"
               />

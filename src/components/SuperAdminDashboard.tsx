@@ -13,6 +13,8 @@ import {supabase} from '../lib/supabase';
 import {
   formatDateTime,
   formatFCFA,
+  formatFormuleName,
+  TOGO_PAYMENT_MODES,
   type Abonnement,
   type CycleAbonnement,
   type Etablissement,
@@ -42,7 +44,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [payEtab, setPayEtab] = useState<Etablissement | null>(null);
   const [payFormule, setPayFormule] = useState<FormuleId>('resto');
   const [payCycle, setPayCycle] = useState<CycleAbonnement>('mensuel');
-  const [payMode, setPayMode] = useState<'Flooz' | 'Moov Money' | 'Orange Money' | 'Wave' | 'Especes'>('Flooz');
+  const [payMode, setPayMode] = useState<'Mixx by Yas' | 'Moov Money' | 'Orange Money' | 'Wave' | 'Especes'>('Mixx by Yas');
   const [payRef, setPayRef] = useState('');
   const [submittingPay, setSubmittingPay] = useState(false);
 
@@ -146,7 +148,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       setFeedback(`Erreur tarif : ${error.message}`);
       return;
     }
-    setFeedback(`Tarifs de ${f.nom} mis à jour avec succès.`);
+    setFeedback(`Tarifs de ${formatFormuleName(f.nom)} mis à jour avec succès.`);
     await onRefreshFormules();
   };
 
@@ -176,7 +178,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       setFeedback(`Erreur paiement : ${error.message}`);
       return;
     }
-    setFeedback(`Paiement enregistré et ${payEtab.nom} activé sur la formule ${payFormule.toUpperCase()}.`);
+    setFeedback(`Paiement enregistré et ${payEtab.nom} activé sur les Formules ${payFormule.toUpperCase()}.`);
     setPayEtab(null);
     setPayRef('');
     await loadAll();
@@ -194,7 +196,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <img
-            src="/logo-emblem.png"
+            src="/pwa-192x192.png"
             alt="Logo EFA RESTO-LIVRO"
             className="w-12 h-12 rounded-full object-contain border border-stone-200 bg-white shrink-0"
           />
@@ -288,7 +290,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             return (
               <div key={f.id} className="rounded-xl border border-stone-200 bg-[#FAF9F6] p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-display font-bold text-sm text-[#161614]">{f.nom}</span>
+                  <span className="font-display font-bold text-sm text-[#161614]">{formatFormuleName(f.nom)}</span>
                   <span className="text-xs font-mono text-stone-500 uppercase">{f.id}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2.5">
@@ -399,7 +401,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs bg-[#FAF9F6] rounded-xl p-3">
                     <div>
-                      <span className="text-stone-500 block">Formule</span>
+                      <span className="text-stone-500 block">Formules</span>
                       <strong className="uppercase">{etab.formule} · {etab.cycle_abonnement}</strong>
                     </div>
                     <div>
@@ -445,7 +447,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               <tr>
                 <th className="px-4 py-3">Établissement</th>
                 <th className="px-4 py-3">Code</th>
-                <th className="px-4 py-3">Formule</th>
+                <th className="px-4 py-3">Formules</th>
                 <th className="px-4 py-3">Statut paiement</th>
                 <th className="px-4 py-3">Échéance</th>
                 <th className="px-4 py-3 text-right">Dernier paiement</th>
@@ -543,7 +545,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">Formule</label>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">Formules</label>
                 <select
                   value={payFormule}
                   onChange={(e) => setPayFormule(e.target.value as FormuleId)}
@@ -551,7 +553,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 >
                   {formules.map((f) => (
                     <option key={f.id} value={f.id}>
-                      {f.nom}
+                      {formatFormuleName(f.nom)}
                     </option>
                   ))}
                 </select>
@@ -576,11 +578,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   onChange={(e) => setPayMode(e.target.value as typeof payMode)}
                   className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm min-h-[48px]"
                 >
-                  <option value="Flooz">Flooz</option>
-                  <option value="Moov Money">Moov Money</option>
-                  <option value="Orange Money">Orange Money</option>
-                  <option value="Wave">Wave</option>
-                  <option value="Especes">Espèces</option>
+                  {TOGO_PAYMENT_MODES.map((m) => (
+                    <option key={m} value={m}>
+                      {m === 'Especes' ? 'Espèces' : m}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
